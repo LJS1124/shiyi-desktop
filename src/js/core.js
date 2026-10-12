@@ -105,7 +105,7 @@ const S = SY.S = {
   ui: Object.assign({
     view: 'today', projectId: null, ptab: 'board', scope: 'all', ideaFilter: 'inbox', tag: '', q: '',
     projArea: 'all', projStatus: 'active', capMode: 'idea', capProject: '', ganttZoom: 'day', ganttHideDone: false,
-    burnMetric: 'count', kbSwim: false, mapId: null, theme: 'system'
+    burnMetric: 'count', kbSwim: false, mapId: null, theme: 'system', skin: 'clay'
   }, lsGet(LS_UI) || {}),
   view: {}, // transient per-view state (scroll, pan/zoom)
   sel: null
@@ -264,7 +264,7 @@ function renderNav() {
   const c = navCounts(), v = S.ui.view;
   const on = k => v === k || (k === 'projects' && v === 'project');
   $('#nav').innerHTML = NAV.map(([h, items]) => `<div class="nav-h">${h}</div>` + items.map(([k, ic, l, col]) =>
-    `<button type="button" data-act="view" data-v="${k}" class="${on(k) ? 'is-on' : ''}" ${on(k) ? 'aria-current="page"' : ''}><span class="ic" style="--c-soft:${cv(col, '-soft')};--c-ink:${cv(col, '-ink')}">${icon(ic)}</span><span>${l}</span><span class="n">${c[k] || ''}</span></button>`).join('')).join('');
+    `<button type="button" data-act="view" data-v="${k}" class="${on(k) ? 'is-on' : ''}" ${on(k) ? 'aria-current="page"' : ''}><span class="ic" style="--c:${cv(col)};--c-soft:${cv(col, '-soft')};--c-ink:${cv(col, '-ink')}">${icon(ic)}</span><span>${l}</span><span class="n">${c[k] || ''}</span></button>`).join('')).join('');
   renderStatus();
 }
 function renderStatus() {
@@ -502,7 +502,10 @@ function toast(msg, opt = {}) {
 Object.assign(SY, { openModal, closeModal, toast });
 
 /* ================= settings ================= */
+const SKINS = [['native', 'macOS 原生'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
+SY.SKINS = SKINS;
 function applyTheme() {
+  document.documentElement.dataset.skin = SKINS.some(s => s[0] === S.ui.skin) ? S.ui.skin : 'clay';
   const t = S.ui.theme;
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
 }
@@ -525,6 +528,7 @@ async function openSettings() {
       <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-sm" type="button" data-act="settings-test" ${invoke ? '' : 'disabled'}>测试连接</button><span id="s-test" class="te"></span></div>
     </div>
     <div class="set-sec"><h3>外观</h3>
+      <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="seg" id="s-theme">${[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([k, l]) => `<button type="button" class="${th === k ? 'is-on' : ''}" data-act="theme" data-v="${k}">${l}</button>`).join('')}</div>
     </div>
     <div class="set-sec"><h3>数据</h3>
@@ -558,6 +562,7 @@ SY.acts['settings-test'] = async () => {
   try { const r = await SY.aiCall('只回复两个字：你好', true); out.textContent = '连接成功：' + String(r).slice(0, 40); }
   catch (e) { out.textContent = SY.aiErrText(e); }
 };
+SY.acts['skin'] = el => { S.ui.skin = el.dataset.v; saveUI(); applyTheme(); $$('#s-skin button').forEach(b => b.classList.toggle('is-on', b.dataset.v === S.ui.skin)); scheduleRender(); };
 SY.acts['theme'] = el => { S.ui.theme = el.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(b => b.classList.toggle('is-on', b.dataset.v === S.ui.theme)); };
 SY.acts['reveal-data'] = async () => { try { await invoke('reveal_data_dir'); } catch (e) { toast('打不开：' + e); } };
 
