@@ -1,10 +1,11 @@
 name: Build macOS app
 
+# Builds run on demand (Actions → Run workflow, or `gh workflow run build-macos.yml`)
+# and for version tags, so day-to-day commits don't spend macOS minutes.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['**.md']
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 concurrency:
   group: build-${{ github.ref }}

@@ -53,7 +53,11 @@ npm run dev          # 开发模式
 npm run build:mac    # 打包 universal .app 和 .dmg
 ```
 
-不装 Rust 也能预览界面：`cd src && python3 -m http.server`，用浏览器打开即可（数据存在浏览器里，AI 不可用）。
+不装 Rust 也能预览界面：`cd src && python3 -m http.server`，用浏览器打开即可（数据存在浏览器里，AI 不可用）。`python3 scripts/build-preview.py` 会把整个前端打成一个单文件页面 `preview/index.html`，方便放到别处预览。
+
+## 打包
+
+日常提交不会触发编译。需要新安装包时，在 GitHub 的 Actions → Build macOS app 里点 Run workflow，或者推一个 `v*` 版本标签。
 
 ## 结构
 

@@ -544,8 +544,16 @@ button.tag.is-on{background:var(--lav);color:#fff}
   .kb{grid-template-columns:repeat(3,minmax(220px,1fr))}
 }
 @media (max-width:860px){
-  .app{grid-template-columns:minmax(0,1fr)}
-  .side{display:none}
+  .app,:root[data-skin] .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .capture,:root[data-skin] .capture{flex-wrap:wrap;max-width:none}
+  .cap-input{flex-basis:100%;order:-1}
+  .capture .btn-primary{margin-left:auto}
+  .topbar,:root[data-skin] .topbar{padding:8px 8px 4px;min-height:0}
+  .side,:root[data-skin] .side{margin:8px 8px 0;padding:6px;border-radius:14px;flex-direction:row;overflow-x:auto;overflow-y:hidden;gap:0;min-height:0}
+  .side .brand,.side .side-foot,.side .side-drag,.nav-h{display:none}
+  .nav{flex-direction:row;gap:4px}
+  .nav button{width:auto;white-space:nowrap;padding:6px 10px}
+  .nav .n{display:none}
   .kb{grid-template-columns:minmax(0,1fr)}
   .mm-layout{grid-template-columns:minmax(0,1fr)}
   .mm-list{display:none}

@@ -55,6 +55,12 @@ function seedExamples() {
 async function boot() {
   SY.applyTheme();
   document.body.classList.toggle('no-ai', !SY.isApp);
+  // web preview inside Claude: AI runs on the viewer's Claude account, export goes through the save dialog
+  const C = window.claude;
+  if (!SY.isApp && C && typeof C.use === 'function') {
+    C.use('sample').then(fn => { if (fn) { SY.sampleFn = fn; document.body.classList.remove('no-ai'); } }).catch(() => {});
+    C.use('downloads').then(d => { if (d) SY.dl = d; }).catch(() => {});
+  }
   SY.renderAll();
   await SY.loadAll();
   const empty = SY.COLS.every(c => S.data[c].size === 0);

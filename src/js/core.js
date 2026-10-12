@@ -270,7 +270,7 @@ function renderNav() {
 function renderStatus() {
   const el = $('#side-foot'); if (!el) return;
   const cls = S.saveErr ? 'is-err' : SY.isApp ? '' : 'is-local';
-  const txt = S.saveErr ? '保存出错，点设置查看' : SY.isApp ? '已保存到本机' : '浏览器预览 · 存于本页';
+  const txt = S.saveErr ? '保存出错，点设置查看' : SY.isApp ? '已保存到本机' : '网页预览 · 数据存在这个浏览器里';
   el.innerHTML = `<span class="status ${cls}"><i></i>${txt}</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm btn-ghost" type="button" data-act="export">${icon('down', 14)}导出</button>
@@ -504,12 +504,15 @@ Object.assign(SY, { openModal, closeModal, toast });
 /* ================= settings ================= */
 const SKINS = [['native', 'macOS 原生'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
 SY.SKINS = SKINS;
+let themeSetByApp = false;
 function applyTheme() {
   document.documentElement.dataset.skin = SKINS.some(s => s[0] === S.ui.skin) ? S.ui.skin : 'native';
   document.documentElement.classList.toggle('is-app', SY.isApp);
   const t = S.ui.theme;
   try { const w = T && T.window && T.window.getCurrentWindow && T.window.getCurrentWindow(); if (w && w.setTheme) w.setTheme(t === 'light' || t === 'dark' ? t : null).catch(() => {}); } catch (e) {}
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  // only touch data-theme when the user picked one here, so a host page's own theme choice is kept
+  if (t === 'light' || t === 'dark') { document.documentElement.dataset.theme = t; themeSetByApp = true; }
+  else if (themeSetByApp) { delete document.documentElement.dataset.theme; themeSetByApp = false; }
 }
 SY.applyTheme = applyTheme;
 async function openSettings() {
@@ -518,7 +521,7 @@ async function openSettings() {
   const th = S.ui.theme;
   openModal('设置', `
     <div class="set-sec"><h3>AI 接口</h3>
-      ${invoke ? '' : '<p>浏览器预览模式下不能调用 AI，安装桌面版后可用。</p>'}
+      ${invoke ? '' : SY.sampleFn ? '<p><b>网页预览里，AI 通过你的 Claude 账号运行</b>，下面这些设置在预览里不起作用；装到 Mac 上以后才用这里填的接口和 Key。</p>' : '<p>浏览器预览模式下不能调用 AI，安装桌面版后可用。</p>'}
       <p>支持 Anthropic 官方接口，也支持兼容 OpenAI 格式的网关（如 LiteLLM、自建代理）。API Key 只保存在本机。</p>
       <div class="ai-grid">
         <label>接口格式<select class="in" id="s-format"><option value="anthropic" ${st.apiFormat !== 'openai' ? 'selected' : ''}>Anthropic Messages</option><option value="openai" ${st.apiFormat === 'openai' ? 'selected' : ''}>OpenAI 兼容（/chat/completions）</option></select></label>
@@ -527,7 +530,7 @@ async function openSettings() {
         <label>快速模型（排今日、扩展导图）<input class="in mono" id="s-quick" value="${esc(st.quickModel)}"></label>
       </div>
       <label class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:600">API Key<input class="in mono" id="s-key" type="password" placeholder="${st.hasKey ? '已保存（留空则不修改）' : 'sk-…'}" autocomplete="off"></label>
-      <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-sm" type="button" data-act="settings-test" ${invoke ? '' : 'disabled'}>测试连接</button><span id="s-test" class="te"></span></div>
+      <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-sm" type="button" data-act="settings-test" ${invoke || SY.sampleFn ? '' : 'disabled'}>测试连接</button><span id="s-test" class="te"></span></div>
     </div>
     <div class="set-sec"><h3>外观</h3>
       <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
@@ -569,7 +572,12 @@ SY.acts['theme'] = el => { S.ui.theme = el.dataset.v; saveUI(); applyTheme(); $$
 SY.acts['reveal-data'] = async () => { try { await invoke('reveal_data_dir'); } catch (e) { toast('打不开：' + e); } };
 
 /* ================= AI transport ================= */
+const SAMPLE_ERR = { not_granted: '你还没有允许这个页面调用 Claude。', sampling_disabled: '你的账号当前不能在页面里调用 Claude。', rate_limited: '调用太频繁或用量到了上限，过一会儿再试。', session_expired: '登录已过期，重新登录 Claude 后再试。', refused: 'Claude 没有处理这条内容，换个说法再试。' };
 SY.aiCall = async (prompt, quick) => {
+  if (!invoke && SY.sampleFn) {
+    try { const r = await SY.sampleFn(prompt, { modelTier: quick ? 'quick' : 'default', cache: false }); return r.text; }
+    catch (e) { throw { code: 'api', message: SAMPLE_ERR[e && e.code] || (e && e.message) || '连接中断了' }; }
+  }
   if (!invoke) throw { code: 'no_backend' };
   try { return await invoke('ai_complete', { prompt, quick: !!quick }); }
   catch (e) { const m = String(e); if (m.includes('NO_KEY')) throw { code: 'no_key' }; throw { code: 'api', message: m }; }
@@ -597,6 +605,11 @@ async function doExport() {
   const fileName = `拾遗备份-${TODAY()}.json`;
   if (invoke) {
     try { const ok = await invoke('export_data', { data, fileName }); if (ok) toast('备份已导出'); } catch (e) { toast('导出失败：' + e); }
+    return;
+  }
+  if (SY.dl) {
+    try { await SY.dl.save({ filename: fileName, data: JSON.stringify(data, null, 2) }); toast('备份已导出'); }
+    catch (e) { if (!e || e.code !== 'declined') toast('导出没有成功，稍后再试。'); }
     return;
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
