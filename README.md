@@ -173,15 +173,12 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 
 ## 架构
 
-```mermaid
-flowchart LR
-  you["你"] --> gui["拾忆 App<br/>界面：HTML / CSS / JS<br/>外壳：Tauri 2 + Rust"]
-  agent["AI 助手<br/>Claude Code、Codex 等"] --> cli["shiyi 命令行<br/>JSON 进出"]
-  gui -->|"core_apply / core_query"| core["shiyi-core<br/>校验、权限、批次、撤销<br/>查询、知识图谱、相关推荐"]
-  cli --> core
-  core --> db[("shiyi.db<br/>SQLite + 操作记录")]
-  db -.->|"写入后刷新界面"| gui
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
+  <img src="docs/architecture-light.png" alt="架构图：界面和命令行都经过 shiyi-core 写入同一个 SQLite 数据库，其他进程写入后界面自动刷新" width="100%">
+</picture>
+
+<sub>图的源文件是 [`docs/architecture.mmd`](docs/architecture.mmd)，改完后用 mermaid-cli 重新生成两张 PNG。</sub>
 
 - 所有写入都经过 `shiyi-core`：先校验，再检查权限，然后整批写入（要么全部成功，要么全部不生效），同时记下修改前后的快照，所以任何一批都能撤销。
 - 界面和命令行打开的是同一个数据库文件。应用会监听其他进程的写入：AI 改了数据，界面会自动刷新，并弹出提示「某某改了几处」。

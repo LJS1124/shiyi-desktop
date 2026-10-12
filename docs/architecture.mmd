@@ -1,0 +1,7 @@
+flowchart LR
+  you["你"] --> gui["拾忆 App<br/>界面：HTML / CSS / JS<br/>外壳：Tauri 2 + Rust"]
+  agent["AI 助手<br/>Claude Code、Codex 等"] --> cli["shiyi 命令行<br/>JSON 进出"]
+  gui -->|"core_apply / core_query"| core["shiyi-core<br/>校验、权限、批次、撤销<br/>查询、知识图谱、相关推荐"]
+  cli --> core
+  core --> db[("shiyi.db<br/>SQLite + 操作记录")]
+  db -.->|"写入后刷新界面"| gui
