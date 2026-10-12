@@ -16,6 +16,11 @@ html = (SRC / "index.html").read_text(encoding="utf-8")
 styles = re.findall(r'<link rel="stylesheet" href="([^"]+)">', html)
 scripts = re.findall(r'<script src="([^"]+)"></script>', html)
 body = re.search(r"<body>(.*?)<script src=", html, re.S).group(1).strip()
+import base64
+def inline_img(m):
+    data = base64.b64encode((SRC / m.group(1)).read_bytes()).decode()
+    return f'src="data:image/png;base64,{data}"'
+body = re.sub(r'src="(assets/[^"]+\.png)"', inline_img, body)
 
 css = "\n".join((SRC / s).read_text(encoding="utf-8") for s in styles)
 js = "\n".join((SRC / s).read_text(encoding="utf-8").replace("</script", "<\\/script") for s in scripts)

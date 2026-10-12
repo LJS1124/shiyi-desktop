@@ -134,6 +134,7 @@ textarea.in{resize:vertical;line-height:1.65}
 .side-drag{position:absolute;left:0;right:0;top:0;height:40px}
 .brand{display:flex;align-items:center;gap:11px;padding:30px 8px 0;position:relative}
 .seal{width:38px;height:38px;border-radius:13px;background:var(--lav);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;line-height:1.05;box-shadow:4px 5px 12px rgba(139,124,246,.45),inset 2px 2px 4px rgba(255,255,255,.45),inset -3px -3px 6px rgba(60,40,170,.35)}
+.logo{width:38px;height:38px;border-radius:10px;flex:none;display:block;box-shadow:0 1px 3px rgba(20,30,60,.14),0 0 0 .5px rgba(20,30,60,.08)}
 .brand-name{font-weight:800;font-size:17px;letter-spacing:.04em}
 .brand-sub{font-size:11.5px;color:var(--ink-3)}
 .nav{display:flex;flex-direction:column;gap:3px}

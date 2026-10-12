@@ -63,6 +63,8 @@
 [data-skin="native"] .brand{padding:34px 8px 0}
 [data-skin="native"] .seal{width:32px;height:32px;border-radius:8px;font-size:11px;background:linear-gradient(180deg,#43A0FF,#006CFF);box-shadow:0 1px 2px rgba(0,0,0,.2)}
 [data-skin="native"] .brand-name{font-size:15px;font-weight:700;letter-spacing:0}
+[data-skin="native"] .logo{width:34px;height:34px;border-radius:8px}
+[data-skin="mono"] .logo{width:28px;height:28px;border-radius:7px}
 [data-skin="native"] .nav-h{font-size:11px;letter-spacing:.02em;padding:14px 10px 4px;font-weight:600}
 [data-skin="native"] .nav button{padding:4px 8px;border-radius:7px;font-weight:500;font-size:13px;gap:9px}
 [data-skin="native"] .nav button:hover{background:rgba(0,0,0,.04)}
