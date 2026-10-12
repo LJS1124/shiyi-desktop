@@ -1,0 +1,55 @@
+name: Test
+
+# Runs on every push that touches Rust code: the core's tests (incl. the CLI)
+# and a compile check of the desktop shell. Cheap Linux runners only.
+on:
+  push:
+    branches: [main]
+    paths: ['core/**', 'src-tauri/**', 'skills/**', '.github/workflows/test.yml']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+      - name: cargo test (core + CLI)
+        working-directory: core
+        run: |
+          set -o pipefail
+          cargo test --color never 2>&1 | tee ../test.log
+      - name: Show failures as annotations
+        if: failure()
+        run: grep -E "^(error|warning: unused|---- |thread '.*' panicked)" -A 4 test.log | head -40 | sed 's/^/::error::/' || true
+
+  desktop-check:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries for Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: cargo check (desktop app)
+        working-directory: src-tauri
+        run: |
+          set -o pipefail
+          cargo check --color never --message-format short 2>&1 | tee ../check.log
+      - name: Show errors as annotations
+        if: failure()
+        run: grep -E "(error|warning)(\[|:)" check.log | head -40 | sed 's/^/::error::/' || true

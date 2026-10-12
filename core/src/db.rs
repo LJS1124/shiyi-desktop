@@ -147,6 +147,14 @@ impl Core {
         Ok(())
     }
 
+    /// App bookkeeping (first run, onboarding). Use the `settings.set` op for user settings.
+    pub fn set_meta(&self, key: &str, value: &str) -> Result<()> {
+        if key == "agent_permission" || key == "schema_version" {
+            return Err(Error::new("invalid_value", "use the settings.set op for this key"));
+        }
+        Core::meta_set(&self.conn, key, value)
+    }
+
     /// What agents may do: `read`, `write` (default) or `full`.
     pub fn permission(&self) -> String {
         self.meta_get("agent_permission").ok().flatten().unwrap_or_else(|| "write".into())

@@ -1,20 +1,31 @@
-//! 十一遗 desktop backend: local JSON storage with daily backups, settings,
-//! AI proxy (Anthropic Messages or OpenAI-compatible), import/export dialogs,
-//! and a global quick-capture shortcut.
+//! 十一遗 desktop backend: the shiyi-core SQLite store (shared with the `shiyi`
+//! CLI that AI agents use), a watcher that tells the window when an agent
+//! changed something, settings, the AI proxy, import/export dialogs, CLI and
+//! skill installers, and the global quick-capture shortcut.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use shiyi_core::Core;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 static QUITTING: AtomicBool = AtomicBool::new(false);
 const KEEP_BACKUPS: usize = 14;
+
+struct Store {
+    core: Mutex<Option<Core>>,
+    error: Option<String>,
+    path: PathBuf,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -69,65 +80,211 @@ fn read_settings(app: &AppHandle) -> Settings {
         .unwrap_or_default()
 }
 
-fn prune_backups(dir: &Path, keep: usize) {
-    if let Ok(rd) = fs::read_dir(dir) {
-        let mut files: Vec<PathBuf> = rd
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.extension().map(|x| x == "json").unwrap_or(false))
-            .collect();
-        files.sort();
-        if files.len() > keep {
-            let extra = files.len() - keep;
-            for p in files.iter().take(extra) {
-                let _ = fs::remove_file(p);
+fn home() -> PathBuf {
+    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// Runs `f` with the database, mapping errors to `{code, message, hint}`.
+fn with_core<T>(store: &Store, f: impl FnOnce(&mut Core) -> shiyi_core::Result<T>) -> Result<T, Value> {
+    let mut guard = store
+        .core
+        .lock()
+        .map_err(|_| json!({ "code": "busy", "message": "数据库正忙，请稍后再试" }))?;
+    match guard.as_mut() {
+        Some(core) => f(core).map_err(|e| e.to_json()["error"].clone()),
+        None => Err(json!({
+            "code": "db_unavailable",
+            "message": format!("打不开数据库：{}", store.error.clone().unwrap_or_default()),
+            "hint": store.path.display().to_string()
+        })),
+    }
+}
+
+// ---------- data ----------
+
+#[tauri::command]
+fn core_query(store: State<'_, Store>, q: Value) -> Result<Value, Value> {
+    with_core(&store, |c| c.query(q))
+}
+
+#[tauri::command]
+fn core_apply(store: State<'_, Store>, req: Value) -> Result<Value, Value> {
+    with_core(&store, |c| c.apply(req, "user"))
+}
+
+/// True exactly once, on the very first launch with an empty database.
+#[tauri::command]
+fn is_first_run(store: State<'_, Store>) -> Result<bool, Value> {
+    with_core(&store, |c| {
+        let seen = c.meta_get("first_run_at")?.is_some() || c.meta_get("legacy_imported")?.is_some();
+        if !seen {
+            c.set_meta("first_run_at", &c.clock().now_iso())?;
+        }
+        Ok(!seen && c.is_empty()?)
+    })
+}
+
+#[tauri::command]
+async fn core_export(app: AppHandle, file_name: String) -> Result<bool, Value> {
+    let snap = {
+        let store = app.state::<Store>();
+        with_core(&store, |c| c.query(json!({ "q": "snapshot" })))?
+    };
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .set_file_name(file_name)
+        .blocking_save_file();
+    let Some(fp) = picked else { return Ok(false) };
+    let path = fp.into_path().map_err(|e| json!({ "code": "io_error", "message": e.to_string() }))?;
+    let bytes = serde_json::to_vec_pretty(&snap).map_err(|e| json!({ "code": "io_error", "message": e.to_string() }))?;
+    fs::write(&path, bytes).map_err(|e| json!({ "code": "io_error", "message": e.to_string() }))?;
+    Ok(true)
+}
+
+#[tauri::command]
+async fn core_import(app: AppHandle) -> Result<Option<Value>, Value> {
+    let picked = app.dialog().file().add_filter("JSON", &["json"]).blocking_pick_file();
+    let Some(fp) = picked else { return Ok(None) };
+    let path = fp.into_path().map_err(|e| json!({ "code": "io_error", "message": e.to_string() }))?;
+    let text = fs::read_to_string(&path).map_err(|e| json!({ "code": "io_error", "message": e.to_string() }))?;
+    let data: Value = serde_json::from_str(&text).map_err(|e| json!({ "code": "invalid_json", "message": format!("不是有效的 JSON：{e}") }))?;
+    let store = app.state::<Store>();
+    with_core(&store, |c| c.import(data, "user")).map(Some)
+}
+
+#[tauri::command]
+fn reveal_data_dir(store: State<'_, Store>) -> Result<(), String> {
+    let dir = store.path.parent().map(Path::to_path_buf).unwrap_or_else(home);
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener).arg(&dir).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---------- AI access: CLI + skill ----------
+
+const CLI_MARK: &str = "# 十一遗命令行";
+
+fn cli_targets() -> Vec<PathBuf> {
+    vec![home().join(".local/bin/shiyi"), PathBuf::from("/usr/local/bin/shiyi"), PathBuf::from("/opt/homebrew/bin/shiyi")]
+}
+
+fn skill_path() -> PathBuf {
+    home().join(".claude/skills/shiyi/SKILL.md")
+}
+
+#[tauri::command]
+fn cli_status(store: State<'_, Store>) -> Value {
+    let installed: Vec<String> = cli_targets()
+        .into_iter()
+        .filter(|p| fs::read_to_string(p).map(|t| t.contains(CLI_MARK)).unwrap_or(false))
+        .map(|p| p.display().to_string())
+        .collect();
+    let skill = skill_path();
+    let skill_current = fs::read_to_string(&skill).map(|t| t == shiyi_core::SKILL_MD).unwrap_or(false);
+    json!({
+        "installed": installed,
+        "exe": std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default(),
+        "skill_path": skill.display().to_string(),
+        "skill_installed": skill.exists(),
+        "skill_current": skill_current,
+        "db": store.path.display().to_string(),
+        "version": shiyi_core::VERSION
+    })
+}
+
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+#[tauri::command]
+fn install_cli() -> Result<Value, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_s = exe.display().to_string();
+    if exe_s.contains("/AppTranslocation/") || exe_s.contains("/Volumes/") {
+        return Err("先把十一遗拖进「应用程序」文件夹并从那里打开，再安装命令行工具。".into());
+    }
+    let script = format!("#!/bin/sh\n{CLI_MARK}（由十一遗安装；重新安装应用后在 设置 → AI 接入 里再点一次安装）\nexec {} --cli \"$@\"\n", sh_quote(&exe_s));
+    let mut written = vec![];
+    let mut errors = vec![];
+    for (i, target) in cli_targets().into_iter().enumerate() {
+        let dir = match target.parent() {
+            Some(d) => d.to_path_buf(),
+            None => continue,
+        };
+        if i == 0 {
+            if let Err(e) = fs::create_dir_all(&dir) {
+                errors.push(format!("{}: {e}", dir.display()));
+                continue;
             }
+        } else if !dir.is_dir() {
+            continue;
+        }
+        // never overwrite somebody else's `shiyi`
+        if target.exists() && !fs::read_to_string(&target).map(|t| t.contains(CLI_MARK)).unwrap_or(false) {
+            continue;
+        }
+        match fs::write(&target, &script) {
+            Ok(()) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(&target, fs::Permissions::from_mode(0o755));
+                }
+                written.push(target.display().to_string());
+            }
+            Err(e) if i == 0 => errors.push(format!("{}: {e}", target.display())),
+            Err(_) => {}
         }
     }
-}
-
-#[tauri::command]
-fn is_first_run(app: AppHandle) -> Result<bool, String> {
-    Ok(!data_dir(&app)?.join("data.json").exists())
-}
-
-#[tauri::command]
-fn load_data(app: AppHandle) -> Result<Value, String> {
-    let path = data_dir(&app)?.join("data.json");
-    if !path.exists() {
-        return Ok(json!({}));
+    if written.is_empty() {
+        return Err(format!("没能写入命令行工具：{}", errors.join("；")));
     }
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map_err(|e| format!("数据文件无法解析：{e}。可以在「设置 → 数据」里从备份恢复。"))
+    let on_default_path = written.iter().any(|p| !p.starts_with(&home().display().to_string()));
+    Ok(json!({
+        "paths": written,
+        "on_default_path": on_default_path,
+        "path_hint": "echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc"
+    }))
 }
 
 #[tauri::command]
-fn save_data(app: AppHandle, data: Value) -> Result<(), String> {
-    let dir = data_dir(&app)?;
-    let path = dir.join("data.json");
-    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
-    // keep the first version of each day before overwriting it
-    let backups = dir.join("backups");
-    fs::create_dir_all(&backups).map_err(|e| e.to_string())?;
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let daily = backups.join(format!("data-{today}.json"));
-    if !daily.exists() && path.exists() {
-        let _ = fs::copy(&path, &daily);
-        prune_backups(&backups, KEEP_BACKUPS);
+fn install_skill(dir: Option<String>) -> Result<String, String> {
+    let file = match dir.filter(|d| !d.trim().is_empty()) {
+        Some(d) => PathBuf::from(d.trim()).join("shiyi").join("SKILL.md"),
+        None => skill_path(),
+    };
+    if let Some(parent) = file.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    write_atomic(&path, &bytes)
+    fs::write(&file, shiyi_core::SKILL_MD).map_err(|e| e.to_string())?;
+    Ok(file.display().to_string())
 }
 
 #[tauri::command]
-fn get_settings(app: AppHandle) -> Result<PublicSettings, String> {
+fn skill_text() -> String {
+    shiyi_core::SKILL_MD.to_string()
+}
+
+// ---------- settings + AI proxy ----------
+
+#[tauri::command]
+fn get_settings(app: AppHandle, store: State<'_, Store>) -> Result<PublicSettings, String> {
     let s = read_settings(&app);
-    let path = data_dir(&app)?.join("data.json");
     Ok(PublicSettings {
         api_format: s.api_format,
         api_base: s.api_base,
         model: s.model,
         quick_model: s.quick_model,
         has_key: !s.api_key.trim().is_empty(),
-        data_path: path.to_string_lossy().to_string(),
+        data_path: store.path.display().to_string(),
     })
 }
 
@@ -258,48 +415,7 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
     }
 }
 
-#[tauri::command]
-async fn export_data(app: AppHandle, data: Value, file_name: String) -> Result<bool, String> {
-    let picked = app
-        .dialog()
-        .file()
-        .add_filter("JSON", &["json"])
-        .set_file_name(file_name)
-        .blocking_save_file();
-    let Some(fp) = picked else { return Ok(false) };
-    let path = fp.into_path().map_err(|e| e.to_string())?;
-    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
-    fs::write(&path, bytes).map_err(|e| e.to_string())?;
-    Ok(true)
-}
-
-#[tauri::command]
-async fn import_data(app: AppHandle) -> Result<Option<Value>, String> {
-    let picked = app.dialog().file().add_filter("JSON", &["json"]).blocking_pick_file();
-    let Some(fp) = picked else { return Ok(None) };
-    let path = fp.into_path().map_err(|e| e.to_string())?;
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text)
-        .map(Some)
-        .map_err(|e| format!("不是有效的 JSON：{e}"))
-}
-
-#[tauri::command]
-fn reveal_data_dir(app: AppHandle) -> Result<(), String> {
-    let dir = data_dir(&app)?;
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(target_os = "windows") {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(opener)
-        .arg(&dir)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
+// ---------- app ----------
 
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -309,11 +425,56 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Polls SQLite's data_version, which changes only when another process
+/// (the `shiyi` CLI run by an agent) commits, and tells the window.
+fn spawn_watcher(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut last: Option<i64> = None;
+        loop {
+            std::thread::sleep(Duration::from_millis(800));
+            let store = app.state::<Store>();
+            let seen = match store.core.lock() {
+                Ok(g) => g.as_ref().map(|c| (c.data_version(), c.max_seq())),
+                Err(_) => None,
+            };
+            if let Some((version, seq)) = seen {
+                if last.is_some_and(|l| l != version) {
+                    let _ = app.emit("db-changed", json!({ "seq": seq }));
+                }
+                last = Some(version);
+            }
+        }
+    });
+}
+
+fn open_store(app: &AppHandle) -> Store {
+    let path = shiyi_core::default_db_path();
+    match Core::open(&path) {
+        Ok(mut core) => {
+            if let Ok(dir) = data_dir(app) {
+                match core.import_legacy_file_once(&dir.join("data.json")) {
+                    Ok(Some(r)) => eprintln!("十一遗: imported data.json ({} items)", r["imported"]),
+                    Ok(None) => {}
+                    Err(e) => eprintln!("十一遗: data.json import failed: {e}"),
+                }
+            }
+            if let Err(e) = core.backup_daily(KEEP_BACKUPS) {
+                eprintln!("十一遗: backup failed: {e}");
+            }
+            Store { core: Mutex::new(Some(core)), error: None, path }
+        }
+        Err(e) => Store { core: Mutex::new(None), error: Some(e.to_string()), path },
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let store = open_store(app.handle());
+            app.manage(store);
+            spawn_watcher(app.handle().clone());
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{
@@ -350,15 +511,19 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            core_query,
+            core_apply,
             is_first_run,
-            load_data,
-            save_data,
+            core_export,
+            core_import,
+            reveal_data_dir,
+            cli_status,
+            install_cli,
+            install_skill,
+            skill_text,
             get_settings,
             save_settings,
-            ai_complete,
-            export_data,
-            import_data,
-            reveal_data_dir
+            ai_complete
         ])
         .build(tauri::generate_context!())
         .expect("error while building 十一遗");
