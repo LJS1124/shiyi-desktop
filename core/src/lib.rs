@@ -16,6 +16,7 @@ mod legacy;
 pub mod model;
 mod ops;
 mod query;
+mod related;
 pub mod time;
 mod util;
 

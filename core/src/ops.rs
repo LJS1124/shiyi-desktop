@@ -92,11 +92,15 @@ pub fn apply(core: &mut Core, req: Value, actor: &str) -> Result<Value> {
 
 /// Runs operations as one transaction (no size limit; used by import).
 pub(crate) fn run_batch(core: &mut Core, ops: Vec<Map<String, Value>>, dry_run: bool, note: Option<String>, actor: &str) -> Result<Value> {
+    run_batch_mode(core, ops, dry_run, note, actor, false)
+}
+
+pub(crate) fn run_batch_mode(core: &mut Core, ops: Vec<Map<String, Value>>, dry_run: bool, note: Option<String>, actor: &str, import: bool) -> Result<Value> {
     let actor = actor_name(actor);
     let clock = core.clock();
     let perm = Perm::parse(&core.permission()).unwrap_or(Perm::Write);
     let tx = core.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let mut cx = Ctx { tx: &tx, clock, actor, perm, batch: new_id("bat"), refs: HashMap::new(), changes: vec![], note, logged: 0, task_deps: None };
+    let mut cx = Ctx { tx: &tx, clock, actor, perm, batch: new_id("bat"), refs: HashMap::new(), changes: vec![], note, logged: 0, task_deps: None, import };
     let mut results = vec![];
     for (i, op) in ops.iter().enumerate() {
         match cx.run(op) {
@@ -145,6 +149,8 @@ struct Ctx<'a> {
     logged: usize,
     /// cached task -> depends_on for cycle checks
     task_deps: Option<HashMap<String, Vec<String>>>,
+    /// bulk import: references may point forward or in circles
+    import: bool,
 }
 
 fn canonical_verb(v: &str) -> &str {
@@ -173,12 +179,22 @@ impl<'a> Ctx<'a> {
         self.actor == "user"
     }
 
+    /// The GUI and bulk imports send whole documents whose references may not resolve yet.
+    fn lenient(&self) -> bool {
+        self.is_user() || self.import
+    }
+
     fn require_write(&self) -> Result<()> {
         if !self.is_user() && self.perm == Perm::Read {
             return Err(Error::new("permission_denied", "agents may only read 十一遗 right now (permission: read)")
                 .hint("ask the user to change 设置 → AI 接入 → 权限 to 可写 (write)"));
         }
         Ok(())
+    }
+
+    /// Agents with write permission may only suggest links.
+    fn may_confirm_links(&self) -> bool {
+        self.is_user() || self.perm == Perm::Full
     }
 
     fn require_delete(&self, doc: &Map<String, Value>) -> Result<()> {
@@ -256,12 +272,12 @@ impl<'a> Ctx<'a> {
             if !ok {
                 return Err(Error::new("invalid_ref", format!("{} is a {}, expected {}", v, t, if expected == "any" { "an idea, project, task or map" } else { expected })));
             }
-            if !self.is_user() && doc.get("deleted_at").map_or(false, |d| !d.is_null()) {
+            if !self.lenient() && doc.get("deleted_at").map_or(false, |d| !d.is_null()) {
                 return Err(Error::new("deleted", format!("{} is deleted", v)).hint(format!("restore it first: {{\"op\":\"{}.restore\",\"id\":\"{}\"}}", t, v)));
             }
             return Ok(v.to_string());
         }
-        if self.is_user() {
+        if self.lenient() {
             return Ok(v.to_string());
         }
         if model::type_of_id(v).is_some() {
@@ -303,7 +319,7 @@ impl<'a> Ctx<'a> {
     fn target(&self, td: Option<&'static TypeDef>, op: &Map<String, Value>) -> Result<(Map<String, Value>, &'static TypeDef)> {
         let raw = op.get("id").and_then(Value::as_str).ok_or_else(|| Error::new("missing_field", "this op needs \"id\"").hint("pass the entity id, e.g. \"id\":\"task_…\""))?;
         let expected = td.map(|t| t.name).unwrap_or("any");
-        let id = if raw.starts_with('$') || model::type_of_id(raw).is_some() || load_doc(self.tx, raw)?.is_some() || self.is_user() {
+        let id = if raw.starts_with('$') || model::type_of_id(raw).is_some() || load_doc(self.tx, raw)?.is_some() || self.lenient() {
             if let Some(r) = raw.strip_prefix('$') {
                 self.refs.get(r).cloned().ok_or_else(|| Error::new("not_found", format!("no earlier op has ref {:?}", r)))?
             } else {
@@ -488,7 +504,7 @@ impl<'a> Ctx<'a> {
                 if id.is_empty() || id.len() > 64 || id.chars().any(|c| c.is_whitespace() || c == '$') {
                     return Err(Error::new("invalid_id", format!("bad id {:?}", id)).hint("ids are 1-64 characters without spaces; leave id out to get a generated one"));
                 }
-                if !self.is_user() && !id.starts_with(&format!("{}_", td.prefix)) {
+                if !self.lenient() && !id.starts_with(&format!("{}_", td.prefix)) {
                     return Err(Error::new("invalid_id", format!("{} ids must start with {}_", td.name, td.prefix)).hint(format!("e.g. {}_my-key, or leave id out", td.prefix)));
                 }
                 if let Some(ex) = load_doc(self.tx, id)? {
@@ -514,7 +530,8 @@ impl<'a> Ctx<'a> {
             let t = nodes.get(&root).and_then(|n| n.get("text")).and_then(Value::as_str).unwrap_or("").to_string();
             input.insert("title".into(), json!(clip(&t, 80)));
         }
-        let lenient = self.is_user();
+        let lenient = self.lenient();
+        let mut review = false;
         let mut f = {
             let me: &Self = self;
             model::normalize(td, &input, true, &me.clock, &mut |t, v| me.resolve(t, v), lenient)?
@@ -531,6 +548,11 @@ impl<'a> Ctx<'a> {
                 self.check_deps(&id, &deps)?;
             }
             "link" => {
+                // under write permission an agent can only suggest; the user confirms
+                if !self.may_confirm_links() && s(&f, "status") != "suggested" {
+                    f.insert("status".into(), json!("suggested"));
+                    review = true;
+                }
                 if let Some(existing) = self.prepare_link(&id, &mut f)? {
                     self.register_ref(op, s(&existing, "id"));
                     let upgrade = s(&existing, "status") == "suggested" && s(&f, "status") == "confirmed";
@@ -576,6 +598,12 @@ impl<'a> Ctx<'a> {
         self.register_ref(op, &id);
         let mut r = self.brief(&doc);
         r["created"] = json!(true);
+        if td.name == "link" {
+            r["status"] = json!(s(&doc, "status"));
+            if review {
+                r["needs_review"] = json!(true);
+            }
+        }
         Ok(r)
     }
 
@@ -615,7 +643,7 @@ impl<'a> Ctx<'a> {
         if input.is_empty() && outline.is_none() {
             return Err(Error::new("invalid_request", "nothing to update").hint(format!("pass fields to change, e.g. {{\"op\":\"{}.update\",\"id\":\"…\",\"{}\":…}}", td.name, td.title_field)));
         }
-        let lenient = self.is_user();
+        let lenient = self.lenient();
         let mut part = {
             let me: &Self = self;
             model::normalize(td, &input, false, &me.clock, &mut |t, v| me.resolve(t, v), lenient)?
@@ -652,6 +680,10 @@ impl<'a> Ctx<'a> {
                 }
             }
             "link" => {
+                if !self.may_confirm_links() && s(&before, "status") != "confirmed" && s(&after, "status") == "confirmed" {
+                    return Err(Error::new("permission_denied", "only the user can accept a suggested link")
+                        .hint("leave it as a suggestion; the user accepts it in 十一遗 (知识图谱 → 待确认的关联), or raises 设置 → AI 接入 → 权限 to 完全 (full)"));
+                }
                 if before.get("source") != after.get("source") || before.get("target") != after.get("target") || before.get("relation") != after.get("relation") {
                     if let Some(ex) = self.prepare_link(&id, &mut after)? {
                         return Err(Error::new("conflict", format!("an equivalent link already exists: {}", s(&ex, "id"))));
@@ -831,7 +863,7 @@ impl<'a> Ctx<'a> {
                 }
                 let part = {
                     let me: &Self = self;
-                    let mut full = model::normalize(td, &doc_in, true, &me.clock, &mut |t, v| me.resolve(t, v), me.is_user())?;
+                    let mut full = model::normalize(td, &doc_in, true, &me.clock, &mut |t, v| me.resolve(t, v), me.lenient())?;
                     full.remove("created_at");
                     full
                 };

@@ -16,6 +16,7 @@ READ
         --today  --open  --starred  --sort smart|due|updated|created|priority  --limit 50  --full
   shiyi get <id|exact title>                one item with its relations, backlinks and stats
   shiyi search <words…> [--type task]       full-text search over everything
+  shiyi related <id> | --text "…"           possibly related items (local text similarity, no AI)
   shiyi graph [--center <id>] [--depth 2] [--types idea,project] [--no-tags]
   shiyi log [--actor agents|user|<name>] [--entity <id>] [--limit 20] [--detail]
   shiyi trash                               soft-deleted items
@@ -271,6 +272,19 @@ fn run(sess: &Session, a: &Args) -> Result<Value> {
             let mut q = Value::Object(a.fields(&[]));
             q["q"] = json!("search");
             q["text"] = json!(text);
+            sess.query(q)
+        }
+        "related" | "similar" => {
+            let mut q = Value::Object(a.fields(&[]));
+            q["q"] = json!("related");
+            if a.pos.len() > 1 {
+                q["id"] = json!(a.pos[1..].join(" "));
+            } else if q.get("text").is_none() {
+                return Err(usage("pass an id (or title), or --text \"…\""));
+            }
+            if let Some(v) = a.str("limit").and_then(|x| x.parse::<u64>().ok()) {
+                q["limit"] = json!(v);
+            }
             sess.query(q)
         }
         "graph" => {

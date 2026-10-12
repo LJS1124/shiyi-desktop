@@ -78,3 +78,35 @@ fn cli_round_trip() {
     assert!(v.as_str().unwrap().contains("shiyi"));
     let _ = std::fs::remove_dir_all(db.parent().unwrap());
 }
+
+#[test]
+fn cli_related_and_suggested_links() {
+    let db = db();
+    let (code, v) = run(&db, &["idea", "add", "书房的路由器信号差，考虑加一个有线回程"], None);
+    assert_eq!(code, 0, "{}", v);
+    let a = v["results"][0]["id"].as_str().unwrap().to_string();
+    let (code, v) = run(&db, &["idea", "add", "家里路由器换成 Mesh，书房信号太差"], None);
+    assert_eq!(code, 0, "{}", v);
+    let b = v["results"][0]["id"].as_str().unwrap().to_string();
+
+    // the other idea is possibly related
+    let (code, v) = run(&db, &["related", &a], None);
+    assert_eq!(code, 0, "{}", v);
+    let ids: Vec<&str> = v["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap()).collect();
+    assert!(ids.contains(&b.as_str()), "{}", v);
+    // no id and no --text: usage error
+    let (code, _) = run(&db, &["related"], None);
+    assert_eq!(code, 2);
+
+    // the CLI acts as an agent: its link is a suggestion that needs review
+    let (code, v) = run(&db, &["link", "add", &a, &b, "--rel", "supports"], None);
+    assert_eq!(code, 0, "{}", v);
+    assert_eq!(v["results"][0]["status"], "suggested");
+    assert_eq!(v["results"][0]["needs_review"], true);
+    let lid = v["results"][0]["id"].as_str().unwrap().to_string();
+    // and it cannot accept its own suggestion
+    let (code, v) = run(&db, &["link", "confirm", &lid], None);
+    assert_eq!(code, 1);
+    assert_eq!(v["error"]["code"], "permission_denied");
+    let _ = std::fs::remove_dir_all(db.parent().unwrap());
+}

@@ -332,6 +332,30 @@ fn knowledge_graph() {
 }
 
 #[test]
+fn agents_only_suggest_links() {
+    let mut c = core();
+    let r = ok(c.apply(json!({"ops": [{"op": "idea.create", "ref": "a", "text": "甲"}, {"op": "idea.create", "ref": "b", "text": "乙"}]}), "user"));
+    let (a, b) = (id(&r, 0), id(&r, 1));
+    // write permission: forced to a suggestion, and the agent cannot accept it
+    let l = ok(c.apply(json!({"op": "link.create", "source": a, "target": b, "relation": "supports"}), "agent:x"));
+    assert_eq!(l["results"][0]["status"], "suggested");
+    assert_eq!(l["results"][0]["needs_review"], true);
+    let lid = id(&l, 0);
+    let e = err(c.apply(json!({"op": "link.confirm", "id": lid}), "agent:x"));
+    assert_eq!(e.code, "permission_denied");
+    let e = err(c.apply(json!({"op": "link.update", "id": lid, "status": "confirmed"}), "agent:x"));
+    assert_eq!(e.code, "permission_denied");
+    // the agent may still edit its suggestion; the user accepts it
+    ok(c.apply(json!({"op": "link.update", "id": lid, "note": "理由"}), "agent:x"));
+    ok(c.apply(json!({"op": "link.confirm", "id": lid}), "user"));
+    assert_eq!(get(&c, &lid)["status"], "confirmed");
+    // full permission: the agent's links count as confirmed
+    ok(c.apply(json!({"op": "settings.set", "key": "agent_permission", "value": "full"}), "user"));
+    let l2 = ok(c.apply(json!({"op": "link.create", "source": b, "target": a, "relation": "inspired_by"}), "agent:x"));
+    assert_eq!(l2["results"][0]["status"], "confirmed");
+}
+
+#[test]
 fn search_list_and_log() {
     let mut c = core();
     ok(c.apply(

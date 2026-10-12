@@ -31,14 +31,15 @@ pub fn query(core: &Core, req: Value) -> Result<Value> {
         "search" => search(conn, &o)?,
         "today" | "agenda" => today(conn, &clock, &o)?,
         "graph" => graph::graph(conn, &o)?,
+        "related" | "similar" => crate::related::query(conn, &o)?,
         "log" | "history" => log(conn, &o)?,
         "schema" => model::schema_json(o.get("type").and_then(Value::as_str)),
         "doctor" | "check" => doctor(conn)?,
         "status" | "info" => status(core, &clock)?,
         "snapshot" | "dump" | "export" => snapshot(core, &clock)?,
         "settings" => json!({ "agent_permission": core.permission() }),
-        "" => return Err(Error::new("invalid_request", "which query?").hint("set \"q\" to one of: today, list, get, search, graph, log, trash, schema, doctor, status, snapshot")),
-        other => return Err(Error::new("unknown_query", format!("unknown query {:?}", other)).hint("queries: today, list, get, search, graph, log, trash, schema, doctor, status, snapshot")),
+        "" => return Err(Error::new("invalid_request", "which query?").hint("set \"q\" to one of: today, list, get, search, related, graph, log, trash, schema, doctor, status, snapshot")),
+        other => return Err(Error::new("unknown_query", format!("unknown query {:?}", other)).hint("queries: today, list, get, search, related, graph, log, trash, schema, doctor, status, snapshot")),
     };
     if let Value::Object(m) = &mut out {
         m.insert("ok".into(), json!(true));

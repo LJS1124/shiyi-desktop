@@ -704,7 +704,7 @@ pub fn schema_json(only: Option<&str>) -> Value {
             {"op": "link.confirm", "params": "id", "example": {"op": "link.confirm", "id": "link_…"}},
             {"op": "undo", "params": "batch (bat_…) | op (op_…) | last:true; force:true ignores later edits", "example": {"op": "undo", "batch": "bat_…"}}
         ],
-        "queries": ["today", "list", "get", "search", "graph", "log", "trash", "schema", "doctor", "status", "snapshot"],
+        "queries": ["today", "list", "get", "search", "related", "graph", "log", "trash", "schema", "doctor", "status", "snapshot"],
         "conventions": [
             "A request is {\"ops\":[…]} (or one op, or an array). All ops in a request succeed or fail together.",
             "dry_run:true validates and shows the result without saving.",

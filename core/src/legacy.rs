@@ -130,7 +130,7 @@ pub fn import(core: &mut Core, data: Value, actor: &str) -> Result<Value> {
         Value::Object(o) => Some(o),
         _ => None,
     }).collect();
-    let mut res = crate::ops::run_batch(core, ops, false, Some("导入数据".into()), actor)?;
+    let mut res = crate::ops::run_batch_mode(core, ops, false, Some("导入数据".into()), actor, true)?;
     res["imported"] = json!(total);
     if let Some(r) = res.as_object_mut() {
         r.remove("results");
