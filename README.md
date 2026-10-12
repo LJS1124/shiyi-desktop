@@ -130,8 +130,8 @@ shiyi schema                                        # 全部字段、操作和�
 
 ## 安装
 
-1. 打开仓库的 **Actions → Build macOS app**，进入最近一次成功的运行，下载 `Shiyi-macOS-universal`（同时支持 Apple 芯片和 Intel）。
-2. 解压后打开 `Shiyi_1.1.0_universal.dmg`，把 Shiyi 拖进「应用程序」。
+1. 到 [**Releases**](https://github.com/LJS1124/shiyi-desktop/releases/latest) 下载最新的 `Shiyi_x.y.z_universal.dmg`（同时支持 Apple 芯片和 Intel）。
+2. 打开 dmg，把 Shiyi 拖进「应用程序」。
 3. 应用没有付费的 Apple 开发者签名，所以第一次打开会被系统拦下。在「终端」里执行一次：
 
    ```bash
@@ -192,7 +192,15 @@ cargo run --bin shiyi -- today --pretty       # 直接用命令行（SHIYI_DB=/t
 - **前后端相似度一致性**：`node scripts/test_related.mjs <数据库副本>`，逐条对比前端和命令行的「可能相关」结果。
 - **重新生成 README 截图**：`python3 scripts/screenshots.py`，输出到 `docs/screenshots/`。
 
-日常提交只会在 Linux 上跑测试（`.github/workflows/test.yml`：数据层测试、桌面端编译检查、界面端到端测试）。需要新安装包时，在 Actions → Build macOS app 里点 Run workflow，或者推一个 `v*` 版本标签。
+日常提交只会在 Linux 上跑测试（`.github/workflows/test.yml`：数据层测试、桌面端编译检查、界面端到端测试）。
+
+**发布新版本**：先把 `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`core/Cargo.toml`、`package.json` 里的版本号改成同一个，再在 `docs/releases/vX.Y.Z.md` 写好更新说明，然后推送标签：
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+推送标签后会自动编译 universal 版本，并发布到 Releases，附带 dmg 和 zip。标签和应用版本号不一致时会直接报错。只想要一个测试包时，在 Actions → Build macOS app 里点 Run workflow，安装包会出现在这次运行的附件里。
 
 ## 目录结构
 

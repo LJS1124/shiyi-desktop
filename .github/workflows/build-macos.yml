@@ -1,7 +1,8 @@
 name: Build macOS app
 
-# Builds run on demand (Actions → Run workflow, or `gh workflow run build-macos.yml`)
-# and for version tags, so day-to-day commits don't spend macOS minutes.
+# Builds run on demand (Actions → Run workflow) and for version tags, so
+# day-to-day commits don't spend macOS minutes. Pushing a tag like v1.1.0
+# also publishes a GitHub Release with the .dmg attached.
 on:
   workflow_dispatch:
   push:
@@ -11,12 +12,24 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          app=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          if [ "v$app" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $app in src-tauri/tauri.conf.json"
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -49,3 +62,17 @@ jobs:
           name: Shiyi-macOS-universal
           path: out/*
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/$GITHUB_REF_NAME.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          elif [ -f "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" out/* --title "拾忆 $GITHUB_REF_NAME" --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" out/* --title "拾忆 $GITHUB_REF_NAME" --generate-notes
+          fi
