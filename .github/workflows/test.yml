@@ -1,7 +1,8 @@
 name: Test
 
 # Runs on every push that touches Rust code: the core's tests (incl. the CLI)
-# and a compile check of the desktop shell. Cheap Linux runners only.
+# and a compile check of the desktop shell, on Linux and (for the
+# Windows-only code paths) on Windows.
 on:
   push:
     branches: [main]
@@ -55,6 +56,28 @@ jobs:
         if: failure()
         run: |
           grep -E "(error|warning)(\[|:)" check.log | head -40 | sed 's/^/::error::/' || true
+
+  windows:
+    # core tests and a compile check of the desktop shell with the Windows-only code
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            core -> target
+            src-tauri -> target
+      - name: cargo test (core + CLI)
+        working-directory: core
+        run: cargo test --color never
+      - name: cargo check (desktop app)
+        working-directory: src-tauri
+        run: cargo check --color never --message-format short
 
   gui-e2e:
     # the real GUI in Chromium against a real database, with the CLI acting as an AI agent

@@ -9,11 +9,12 @@
 <p align="center">
   <a href="https://github.com/LJS1124/shiyi-desktop/actions/workflows/test.yml"><img src="https://github.com/LJS1124/shiyi-desktop/actions/workflows/test.yml/badge.svg" alt="Test"></a>
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
+  <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
   <img src="https://img.shields.io/badge/version-1.1.0-0A84FF" alt="1.1.0">
 </p>
 
-拾忆是一个 macOS 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
+拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
 
 **你和你的 AI 助手用的是同一份数据。** 界面给人用；`shiyi` 命令行给 AI 用，Claude Code、Codex 这类助手装上技能说明就会操作。AI 做的每一处修改都会实时出现在界面里，并记在「操作记录」中，可以一键撤销。数据全部在本机的一个 SQLite 文件里。
 
@@ -21,7 +22,7 @@
 
 ## 亮点
 
-- **随手记，不打断手头的事**：在任何应用里按 <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> 唤出记录框；`#标签` 自动归类，`[[标题]]` 双链到别的条目。记下的时候会提示「可能和哪条相关」，这一步只比较文字，不调用 AI。
+- **随手记，不打断手头的事**：在任何应用里按 <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd>（Windows 上是 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>）唤出记录框；`#标签` 自动归类，`[[标题]]` 双链到别的条目。记下的时候会提示「可能和哪条相关」，这一步只比较文字，不调用 AI。
 - **一个项目，五种视图**：看板、甘特图、燃尽图、网络图（PERT）、思维导图，用的是同一份任务数据。依赖、三点估算和关键路径在各个视图之间是连通的。
 - **知识图谱**：手动关联、AI 建议、`[[双链]]`、相同标签、项目归属和依赖，都画在一张图上。可以只看某一条周围的局部关系，也可以拖线建立关联。
 - **AI 原生，但由你掌控**：外部 AI 助手通过命令行读写；内置的 AI 功能只在你点按钮时运行，结果先预览、改完再写入。AI 建的关联必须等你确认才算数，每一批修改都可以撤销。
@@ -76,7 +77,7 @@
 
 不需要 MCP，一个命令行加一份技能说明就够了。
 
-1. 打开 **设置 → AI 接入 → 安装命令行工具**，会在 `~/.local/bin/shiyi` 放一个启动脚本。如果终端里找不到这个命令，把 `~/.local/bin` 加进 PATH。
+1. 打开 **设置 → AI 接入 → 安装命令行工具**，会在 `~/.local/bin/shiyi` 放一个启动脚本（Windows 上是 `%USERPROFILE%\.local\bin\shiyi.cmd`，Git Bash 用同目录下的 `shiyi`）。如果终端里找不到这个命令，把 `~/.local/bin` 加进 PATH；Windows 上安装完成后界面会给出一行可以直接复制的 PowerShell 命令。
 2. 点 **安装到 Claude Code**：技能说明会写到 `~/.claude/skills/shiyi/SKILL.md`，Claude Code 会自动读取。其他 AI 可以点「复制技能说明」，粘进它的提示词。
 3. 对 AI 说一句「看看拾忆里我今天该做什么」，或者自己在终端运行 `shiyi today --pretty` 试试。
 
@@ -130,7 +131,11 @@ shiyi schema                                        # 全部字段、操作和�
 
 ## 安装
 
-1. 到 [**Releases**](https://github.com/LJS1124/shiyi-desktop/releases/latest) 下载最新的 `Shiyi_x.y.z_universal.dmg`（同时支持 Apple 芯片和 Intel）。
+到 [**Releases**](https://github.com/LJS1124/shiyi-desktop/releases/latest) 下载对应系统的安装包。
+
+### macOS
+
+1. 下载 `Shiyi_x.y.z_universal.dmg`（同时支持 Apple 芯片和 Intel，需要 macOS 11 或更新）。
 2. 打开 dmg，把 Shiyi 拖进「应用程序」。
 3. 应用没有付费的 Apple 开发者签名，所以第一次打开会被系统拦下。在「终端」里执行一次：
 
@@ -140,7 +145,15 @@ shiyi schema                                        # 全部字段、操作和�
 
    也可以在 系统设置 → 隐私与安全性 里找到 Shiyi，点「仍要打开」。
 
+### Windows
+
+1. 下载 `Shiyi_x.y.z_x64-setup.exe`（64 位，Windows 10 或更新）。
+2. 双击安装。安装在当前用户下，不需要管理员权限；缺少 WebView2 运行库时安装程序会自动下载。
+3. 安装包没有代码签名，SmartScreen 可能提示「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。
+
 ## 快捷键
+
+Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>（<kbd>Alt</kbd><kbd>Shift</kbd> 是输入法切换键，会冲突）。
 
 | 按键 | 作用 |
 | --- | --- |
@@ -152,11 +165,11 @@ shiyi schema                                        # 全部字段、操作和�
 
 ## 数据
 
-- **位置**：`~/Library/Application Support/app.shiyi.desktop/shiyi.db`（SQLite），可以用环境变量 `SHIYI_DB` 改到别处。
+- **位置**：macOS 是 `~/Library/Application Support/app.shiyi.desktop/shiyi.db`，Windows 是 `%APPDATA%\app.shiyi.desktop\shiyi.db`（SQLite），可以用环境变量 `SHIYI_DB` 改到别处。
 - **备份**：每天自动备份一份到 `backups/shiyi-日期.db`，保留最近 14 天；操作记录保留 180 天。
 - **导出 / 导入**：「设置 → 数据」可以导出、导入 JSON。网页预览导出的备份和旧版备份都能导入，导入本身也能撤销。
 - **从旧版升级**：升级时会自动把旧的 `data.json` 导入数据库，原文件改名为 `data.json.imported`。
-- **API Key**：存在同目录的 `settings.json` 里，文件权限是 600，不会离开本机。
+- **API Key**：存在同目录的 `settings.json` 里，macOS 上文件权限是 600，Windows 上放在你的用户目录里，不会离开本机。
 
 ## 架构
 
@@ -192,7 +205,7 @@ cargo run --bin shiyi -- today --pretty       # 直接用命令行（SHIYI_DB=/t
 - **前后端相似度一致性**：`node scripts/test_related.mjs <数据库副本>`，逐条对比前端和命令行的「可能相关」结果。
 - **重新生成 README 截图**：`python3 scripts/screenshots.py`，输出到 `docs/screenshots/`。
 
-日常提交只会在 Linux 上跑测试（`.github/workflows/test.yml`：数据层测试、桌面端编译检查、界面端到端测试）。
+日常提交会自动跑测试（`.github/workflows/test.yml`：数据层测试、桌面端编译检查、界面端到端测试；Windows 上也跑数据层测试和编译检查）。
 
 **发布新版本**：先把 `src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`core/Cargo.toml`、`package.json` 里的版本号改成同一个，再在 `docs/releases/vX.Y.Z.md` 写好更新说明，然后推送标签：
 
@@ -200,7 +213,9 @@ cargo run --bin shiyi -- today --pretty       # 直接用命令行（SHIYI_DB=/t
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-推送标签后会自动编译 universal 版本，并发布到 Releases，附带 dmg 和 zip。标签和应用版本号不一致时会直接报错。只想要一个测试包时，在 Actions → Build macOS app 里点 Run workflow，安装包会出现在这次运行的附件里。
+推送标签后会自动编译 macOS（universal）和 Windows 版本，并发布到 Releases，附带 dmg、zip 和 Windows 安装包。标签和应用版本号不一致时会直接报错。
+
+不想打标签时，在 Actions → Build apps 里点 Run workflow：「编译哪个平台」可以选 all / macos / windows，勾上「发布到 Releases」就会发布，不勾则安装包只出现在这次运行的附件里。已经发布过的版本可以只选 windows 再补发，不会重编 macOS。
 
 ## 目录结构
 

@@ -49,7 +49,7 @@ pub fn data_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("SHIYI_HOME") {
         return PathBuf::from(d);
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+    let home = crate::install::home_dir().unwrap_or_else(|| PathBuf::from("."));
     #[cfg(target_os = "macos")]
     {
         home.join("Library").join("Application Support").join("app.shiyi.desktop")

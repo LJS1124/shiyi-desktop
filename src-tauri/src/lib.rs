@@ -81,7 +81,7 @@ fn read_settings(app: &AppHandle) -> Settings {
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+    shiyi_core::install::home_dir().unwrap_or_else(|| PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" }))
 }
 
 /// Runs `f` with the database, mapping errors to `{code, message, hint}`.
@@ -170,14 +170,14 @@ fn reveal_data_dir(store: State<'_, Store>) -> Result<(), String> {
 
 // ---------- AI access: CLI + skill ----------
 
-const CLI_MARK: &str = "# 拾忆命令行";
-/// Marker written by versions before the rename, still recognised as ours.
-const CLI_MARK_OLD: &str = "# 十一遗命令行";
+use shiyi_core::install::{dir_on_path, is_our_cli, wrapper_for};
 
-fn is_our_cli(text: &str) -> bool {
-    text.contains(CLI_MARK) || text.contains(CLI_MARK_OLD)
+#[cfg(windows)]
+fn cli_targets() -> Vec<PathBuf> {
+    shiyi_core::install::windows_targets(&home())
 }
 
+#[cfg(not(windows))]
 fn cli_targets() -> Vec<PathBuf> {
     vec![home().join(".local/bin/shiyi"), PathBuf::from("/usr/local/bin/shiyi"), PathBuf::from("/opt/homebrew/bin/shiyi")]
 }
@@ -206,18 +206,13 @@ fn cli_status(store: State<'_, Store>) -> Value {
     })
 }
 
-fn sh_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 #[tauri::command]
 fn install_cli() -> Result<Value, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_s = exe.display().to_string();
-    if exe_s.contains("/AppTranslocation/") || exe_s.contains("/Volumes/") {
+    if cfg!(target_os = "macos") && (exe_s.contains("/AppTranslocation/") || exe_s.contains("/Volumes/")) {
         return Err("先把拾忆拖进「应用程序」文件夹并从那里打开，再安装命令行工具。".into());
     }
-    let script = format!("#!/bin/sh\n{CLI_MARK}（由拾忆安装；重新安装应用后在 设置 → AI 接入 里再点一次安装）\nexec {} --cli \"$@\"\n", sh_quote(&exe_s));
     let mut written = vec![];
     let mut errors = vec![];
     for (i, target) in cli_targets().into_iter().enumerate() {
@@ -237,7 +232,7 @@ fn install_cli() -> Result<Value, String> {
         if target.exists() && !fs::read_to_string(&target).map(|t| is_our_cli(&t)).unwrap_or(false) {
             continue;
         }
-        match fs::write(&target, &script) {
+        match fs::write(&target, wrapper_for(&target, &exe_s)) {
             Ok(()) => {
                 #[cfg(unix)]
                 {
@@ -253,12 +248,32 @@ fn install_cli() -> Result<Value, String> {
     if written.is_empty() {
         return Err(format!("没能写入命令行工具：{}", errors.join("；")));
     }
-    let on_default_path = written.iter().any(|p| !p.starts_with(&home().display().to_string()));
+    let (on_default_path, path_hint) = path_advice(&written);
     Ok(json!({
         "paths": written,
         "on_default_path": on_default_path,
-        "path_hint": "echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc"
+        "path_hint": path_hint
     }))
+}
+
+/// Whether the new command can already be found, and the line to run if not.
+#[cfg(windows)]
+fn path_advice(written: &[String]) -> (bool, String) {
+    let dir = PathBuf::from(&written[0]).parent().map(Path::to_path_buf).unwrap_or_else(home);
+    let on_path = std::env::var_os("PATH").map(|p| dir_on_path(&dir, &p)).unwrap_or(false);
+    (on_path, shiyi_core::install::windows_path_hint(&dir))
+}
+
+/// Apps started from Finder get a short PATH, so only the system-wide
+/// locations count as "already on the path".
+#[cfg(not(windows))]
+fn path_advice(written: &[String]) -> (bool, String) {
+    let home = home().display().to_string();
+    let _ = dir_on_path;
+    (
+        written.iter().any(|p| !p.starts_with(&home)),
+        "echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc".into(),
+    )
 }
 
 #[tauri::command]
@@ -486,7 +501,9 @@ pub fn run() {
                 use tauri_plugin_global_shortcut::{
                     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
                 };
-                let capture = Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::Space);
+                // Alt+Shift switches the input language on Windows, so use Ctrl+Alt there
+                let mods = if cfg!(windows) { Modifiers::CONTROL | Modifiers::ALT } else { Modifiers::ALT | Modifiers::SHIFT };
+                let capture = Shortcut::new(Some(mods), Code::Space);
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
                         .with_handler(move |app, shortcut, event| {

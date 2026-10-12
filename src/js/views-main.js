@@ -30,7 +30,7 @@ SY.views.today = {
       </div>`;
     if (empty) {
       return head + `<div class="onboard">
-        <div class="clay"><div class="k">01 · 记下</div><h3>先把脑子里的东西倒出来</h3><p>顶部输入框随手记灵感，#标签 自动归类。在任何应用里按 ⌥⇧Space 都能唤出。</p></div>
+        <div class="clay"><div class="k">01 · 记下</div><h3>先把脑子里的东西倒出来</h3><p>顶部输入框随手记灵感，#标签 自动归类。在任何应用里按 ${SY.keys('⌥⇧Space')} 都能唤出。</p></div>
         <div class="clay"><div class="k">02 · 规划</div><h3>值得做的，变成项目</h3><p>灵感可以一键转项目、用导图展开，或让 AI 拆成任务，再用甘特图和网络图排期。</p></div>
         <div class="clay"><div class="k">03 · 推进</div><h3>每天挑几件放进今日</h3><p>看板拖动推进状态，燃尽图看进度是否赶得上截止日期。</p></div></div>`;
     }

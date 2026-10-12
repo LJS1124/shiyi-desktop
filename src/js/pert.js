@@ -117,7 +117,7 @@ SY.mods.pert = {
           <div style="position:absolute;left:${pad}px;top:${pad}px">${nodes}</div>
         </div>
         <div class="canvas-tools"><button type="button" class="icon-btn clay-btn sm" data-act="pz-out" aria-label="缩小">${icon('minus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="pz-in" aria-label="放大">${icon('plus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="pz-fit" aria-label="适应窗口">${icon('fit')}</button></div>
-        <div class="canvas-hint">从卡片右侧圆点拖线建立依赖 · 点连线后按 Delete 删除 · 双指滚动平移，⌘ + 滚轮缩放 · ES/EF 最早开始/完成，LS/LF 最迟开始/完成（单位：天）${selEdge ? ' · <b>已选中一条依赖，按 Delete 删除</b>' : ''}</div>
+        <div class="canvas-hint">从卡片右侧圆点拖线建立依赖 · 点连线后按 Delete 删除 · 双指滚动平移，${SY.keys('⌘ + 滚轮缩放')} · ES/EF 最早开始/完成，LS/LF 最迟开始/完成（单位：天）${selEdge ? ' · <b>已选中一条依赖，按 Delete 删除</b>' : ''}</div>
       </div>`;
   },
   before(root, scope) { /* pan state lives in S.view.pert, updated live */ },

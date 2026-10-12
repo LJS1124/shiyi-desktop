@@ -124,6 +124,11 @@ const T = window.__TAURI__;
 const invoke = T && T.core && typeof T.core.invoke === 'function' ? T.core.invoke : null;
 SY.invoke = invoke;
 SY.isApp = !!invoke;
+SY.isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+SY.isWin = /Win/.test(navigator.platform || '');
+// shortcut hints are written with Mac symbols; show Windows/Linux spellings there
+SY.keys = s => SY.isMac ? s : String(s)
+  .replace('⌥⇧Space', 'Ctrl+Alt+Space').replace('⇧⌘', 'Ctrl+Shift+').replace('⌘ +', 'Ctrl +').replace(/⌘/g, 'Ctrl+');
 
 /* ================= storage =================
    All writes go through put / patch / remove, which record the change for
@@ -266,7 +271,7 @@ function renderStatus() {
       <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
     </div>
-    <div style="line-height:1.7">⌘K 快速记录 · ⌘1–⌘8 切换<br>Esc 关闭详情</div>`;
+    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘8 切换')}<br>Esc 关闭详情</div>`;
 }
 function renderCapture() {
   const f = $('#capture'); const task = S.ui.capMode === 'task';
@@ -510,12 +515,14 @@ function ask(title, body, okLabel = '确定', { danger = false } = {}) {
 Object.assign(SY, { openModal, closeModal, toast, ask });
 
 /* ================= settings ================= */
-const SKINS = [['native', 'macOS 原生'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
+const SKINS = [['native', /Mac|iPhone|iPad/.test(navigator.platform || '') ? 'macOS 原生' : '原生简约'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
 SY.SKINS = SKINS;
 let themeSetByApp = false;
 function applyTheme() {
   document.documentElement.dataset.skin = SKINS.some(s => s[0] === S.ui.skin) ? S.ui.skin : 'native';
   document.documentElement.classList.toggle('is-app', SY.isApp);
+  document.documentElement.classList.toggle('is-mac', SY.isMac);
+  const kb = document.getElementById('cap-kbd'); if (kb) kb.textContent = SY.keys('⌥⇧Space');
   const t = S.ui.theme;
   try { const w = T && T.window && T.window.getCurrentWindow && T.window.getCurrentWindow(); if (w && w.setTheme) w.setTheme(t === 'light' || t === 'dark' ? t : null).catch(() => {}); } catch (e) {}
   // only touch data-theme when the user picked one here, so a host page's own theme choice is kept
@@ -556,7 +563,7 @@ async function openSettings() {
       </div>
     </div>
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">⌥⇧Space</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">⌘K</b> 聚焦记录框 · <b class="mono">⌘1–⌘8</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘8')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear' });
 }

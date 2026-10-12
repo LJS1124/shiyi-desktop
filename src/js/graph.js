@@ -344,7 +344,7 @@ SY.views.graph = {
         ${card}
         ${sug.length && o.suggested ? suggestPanel(sug) : ''}
         <div class="canvas-tools"><button type="button" class="icon-btn clay-btn sm" data-act="g-relayout" aria-label="重新排布" title="重新排布">${icon('reopen')}</button><button type="button" class="icon-btn clay-btn sm" data-act="gz-out" aria-label="缩小">${icon('minus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="gz-in" aria-label="放大">${icon('plus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="gz-fit" aria-label="适应窗口">${icon('fit')}</button></div>
-        <div class="canvas-hint">${G.linkMode ? '<b>连线模式</b>：从一个节点拖到另一个节点' : '点节点看关系 · 双击打开 · 拖动调整位置 · ⌘ + 滚轮缩放'}</div>
+        <div class="canvas-hint">${G.linkMode ? '<b>连线模式</b>：从一个节点拖到另一个节点' : '点节点看关系 · 双击打开 · 拖动调整位置 · ' + SY.keys('⌘ + 滚轮缩放')}</div>
       </div>
       <div class="legend"><span><i style="--c:var(--ink-3)"></i>归属 / 依赖 / 来源</span><span><i style="--c:var(--lav)"></i>手动关联</span><span><i class="dash" style="--c:var(--lav)"></i>AI 建议（待确认）</span><span><i class="dash" style="--c:var(--peach)"></i>[[双链]] 提到</span><span><i style="--c:var(--mint);opacity:.5"></i>标签</span></div>`}`;
   },

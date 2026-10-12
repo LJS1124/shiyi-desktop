@@ -12,6 +12,7 @@
 pub mod cli;
 mod db;
 mod graph;
+pub mod install;
 mod legacy;
 pub mod model;
 mod ops;

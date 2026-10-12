@@ -371,7 +371,7 @@ fn skill(a: &Args) -> Result<Value> {
     let dir = match a.str("dir") {
         Some(d) => std::path::PathBuf::from(d),
         None => {
-            let home = std::env::var_os("HOME").map(std::path::PathBuf::from).ok_or_else(|| Error::new("io_error", "HOME is not set").hint("pass --dir"))?;
+            let home = crate::install::home_dir().ok_or_else(|| Error::new("io_error", "HOME is not set").hint("pass --dir"))?;
             home.join(".claude").join("skills")
         }
     };

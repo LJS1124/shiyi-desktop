@@ -136,9 +136,9 @@
 [data-skin="native"] .set-sec{border-radius:10px}
 [data-skin="native"] .kbd-hint{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 /* installed app: real macOS sidebar material behind a transparent sidebar */
-.is-app[data-skin="native"] body{background:transparent}
-.is-app[data-skin="native"] .side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
-.is-app[data-skin="native"] .main{background:var(--bg)}
+.is-app.is-mac[data-skin="native"] body{background:transparent}
+.is-app.is-mac[data-skin="native"] .side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.is-app.is-mac[data-skin="native"] .main{background:var(--bg)}
 
 /* =====================================================================
    mono — 素白高密度

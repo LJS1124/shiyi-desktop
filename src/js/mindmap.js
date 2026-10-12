@@ -83,8 +83,8 @@ SY.views.mindmap = {
         <button type="button" class="mini" data-act="mm-branch">${icon('folder', 13)}${isRoot ? '整张转项目' : '分支转项目'}</button>
         <button type="button" class="mini" data-act="mm-idea">${icon('bulb', 13)}存为灵感</button>
         ${!isRoot && a.depth[selId] === 1 ? `<span style="display:inline-flex;gap:5px;margin-left:4px">${PALETTE.map(c => `<button type="button" class="swatch ${selColor === c ? 'is-on' : ''}" style="--c:${cv(c)};width:18px;height:18px" data-act="mm-color" data-v="${c}" aria-label="分支颜色 ${c}"></button>`).join('')}</span>` : ''}
-        <button type="button" class="icon-btn sm" data-act="mm-undo" title="撤销 ⌘Z" aria-label="撤销">${icon('undo')}</button>
-        <button type="button" class="icon-btn sm" data-act="mm-redo" title="重做 ⇧⌘Z" aria-label="重做">${icon('redo')}</button>
+        <button type="button" class="icon-btn sm" data-act="mm-undo" title="撤销 ${SY.keys('⌘Z')}" aria-label="撤销">${icon('undo')}</button>
+        <button type="button" class="icon-btn sm" data-act="mm-redo" title="重做 ${SY.keys('⇧⌘Z')}" aria-label="重做">${icon('redo')}</button>
         <button type="button" class="icon-btn sm" data-act="mm-delmap" title="删除这张导图" aria-label="删除导图">${icon('trash')}</button>
       </div></div>`;
     const nodes = [];
@@ -106,7 +106,7 @@ SY.views.mindmap = {
       <div class="mm-layout">${listHtml}<div class="mm-main">${tb}
         <div class="canvas-wrap dotted" id="mm-wrap"><div class="canvas" id="mm-canvas"><svg id="mm-svg"></svg>${nodes.join('')}</div>
           <div class="canvas-tools"><button type="button" class="icon-btn clay-btn sm" data-act="mm-zoom-out" aria-label="缩小">${icon('minus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="mm-zoom-in" aria-label="放大">${icon('plus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="mm-fit" aria-label="适应窗口">${icon('fit')}</button></div>
-          <div class="canvas-hint">Tab 子节点 · Enter 同级 · 空格或双击编辑 · Delete 删除 · 方向键移动 · ⌘Z 撤销 · 拖动节点到另一个节点上可换父级</div>
+          <div class="canvas-hint">Tab 子节点 · Enter 同级 · 空格或双击编辑 · Delete 删除 · 方向键移动 · ${SY.keys('⌘Z')} 撤销 · 拖动节点到另一个节点上可换父级</div>
         </div></div></div>`;
   },
   after(root) {
