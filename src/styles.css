@@ -459,7 +459,8 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .mnode .fold{position:absolute;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;background:var(--clay);box-shadow:var(--sh-sm);font-size:10px;font-family:var(--f-mono);display:grid;place-items:center;color:var(--ink-2);font-weight:700}
 .mnode .fold.r{right:-26px}.mnode .fold.l{left:-26px}
 .me{fill:none;stroke-linecap:round}
-.mm-edit{position:absolute;z-index:20;border:0;outline:none;resize:none;font:inherit;font-weight:600;padding:7px 14px;border-radius:16px;background:var(--clay);box-shadow:var(--sh-float),0 0 0 3px var(--lav);color:var(--ink);line-height:1.45;overflow:hidden}
+.mm-edit{position:absolute;z-index:20;border:0;outline:none;resize:none;font-family:inherit;margin:0;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--clay);color:var(--ink);overflow:hidden;box-shadow:0 0 0 2px var(--lav),0 4px 14px color-mix(in srgb,var(--lav) 22%,transparent);transition:none}
+.mm-edit::placeholder{color:currentColor;opacity:.4}
 .mm-tb{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .swatch{width:22px;height:22px;border-radius:8px;background:var(--c);box-shadow:inset 2px 2px 3px rgba(255,255,255,.5),2px 2px 5px rgba(0,0,0,.12)}
 .swatch.is-on{outline:2.5px solid var(--ink);outline-offset:2px}

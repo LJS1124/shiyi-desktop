@@ -238,17 +238,46 @@ function startEdit(id) {
   const wrap = document.querySelector('#mm-wrap'); const el = wrap && wrap.querySelector(`.mnode[data-mid="${CSS.escape(id)}"]`);
   const m = curMap(); if (!el || !m) return;
   const isNew = pendingNew === id; pendingNew = null;
-  const st = S.view.mm[m.id] || { k: 1 };
+  const st = S.view.mm[m.id] || { k: 1 }, k = st.k || 1;
   const wr = wrap.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el);
-  const ta = document.createElement('textarea'); ta.className = 'mm-edit';
-  ta.value = nodesOf(m)[id].text || '';
-  Object.assign(ta.style, { left: (r.left - wr.left) + 'px', top: (r.top - wr.top) + 'px', minWidth: Math.max(r.width, 140) + 'px', fontSize: (parseFloat(cs.fontSize) * st.k) + 'px', fontWeight: cs.fontWeight, height: Math.max(r.height, 30) + 'px', width: Math.max(r.width + 40, 180) + 'px', maxWidth: '420px' });
-  wrap.appendChild(ta); S.editing = true; ta.focus(); ta.select();
-  const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, r.height) + 'px'; };
-  fit();
+  // the editor takes the node's exact place and look, and grows away from the parent
+  const N = nodesOf(m), root = wrap.querySelector(`.mnode[data-mid="${CSS.escape(m.rootId)}"]`);
+  const rr = root ? root.getBoundingClientRect() : r;
+  const leftSide = id !== m.rootId && r.left + r.width / 2 < rr.left + rr.width / 2;
+  const isRoot = id === m.rootId;
+  const px = v => parseFloat(v) || 0;
+  const padX = px(cs.paddingLeft), padY = px(cs.paddingTop);
+  const ta = document.createElement('textarea'); ta.className = 'mm-edit'; ta.rows = 1; ta.spellcheck = false;
+  ta.value = N[id].text || '';
+  ta.placeholder = '输入内容';
+  Object.assign(ta.style, {
+    top: (r.top - wr.top) + 'px', fontSize: (px(cs.fontSize) * k) + 'px', fontWeight: cs.fontWeight, lineHeight: cs.lineHeight === 'normal' ? '1.45' : (px(cs.lineHeight) * k) + 'px',
+    padding: `${padY * k}px ${padX * k}px`, borderRadius: (px(cs.borderTopLeftRadius) * k) + 'px',
+    background: cs.backgroundColor, color: cs.color, minHeight: r.height + 'px'
+  });
+  const meas = document.createElement('span');
+  Object.assign(meas.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', font: `${cs.fontWeight} ${px(cs.fontSize) * k}px ${cs.fontFamily}`, left: '-9999px', top: '0' });
+  wrap.appendChild(meas);
+  const maxW = (px(cs.maxWidth) || 260) * k + (isRoot ? 0 : 40 * k), minW = Math.max(r.width, 56 * k);
+  const fit = () => {
+    const longest = (ta.value || ta.placeholder).split('\n').reduce((a, l) => (l.length > a.length ? l : a), '');
+    meas.textContent = longest || ' ';
+    const w = Math.min(maxW, Math.max(minW, meas.getBoundingClientRect().width + padX * k * 2 + 6));
+    ta.style.width = w + 'px';
+    let left = leftSide ? r.right - wr.left - w : isRoot ? r.left - wr.left + r.width / 2 - w / 2 : r.left - wr.left;
+    // keep the editor inside the canvas: pan the map instead of letting the text run off the edge
+    const over = left + ox < 10 ? 10 - (left + ox) : left + ox + w > wr.width - 10 ? wr.width - 10 - (left + ox + w) : 0;
+    if (over && SY.mmPZ && st.x != null) { ox += over; st.x += over; SY.mmPZ.pz.apply(); }
+    ta.style.left = (left + ox) + 'px';
+    ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, r.height) + 'px';
+  };
+  let ox = 0;
+  el.style.visibility = 'hidden';
+  wrap.appendChild(ta); S.editing = true;
+  fit(); ta.focus(); ta.select();
   let done = false;
   const finish = (save, then) => {
-    if (done) return; done = true; S.editing = false; const v = ta.value.replace(/\s+$/, ''); ta.remove();
+    if (done) return; done = true; S.editing = false; const v = ta.value.replace(/\s+$/, ''); ta.remove(); meas.remove(); el.style.visibility = '';
     if (save) setText(id, v, isNew); else if (isNew) setText(id, '', true); else SY.scheduleRender();
     if (then) then();
   };
