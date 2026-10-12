@@ -4,3 +4,5 @@ src-tauri/gen/
 out/
 .DS_Store
 preview/
+core/target
+core/Cargo.lock

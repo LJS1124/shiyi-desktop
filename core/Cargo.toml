@@ -1,0 +1,19 @@
+[package]
+name = "shiyi-core"
+version = "0.2.0"
+edition = "2021"
+description = "十一遗 core: SQLite store, operation log with undo, knowledge graph, and the `shiyi` CLI for humans and AI agents"
+license = "MIT"
+publish = false
+
+[lib]
+name = "shiyi_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "shiyi"
+path = "src/bin/shiyi.rs"
+
+[dependencies]
+rusqlite = { version = "0.34", features = ["bundled"] }
+serde_json = "1"
