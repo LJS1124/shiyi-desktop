@@ -1,0 +1,15 @@
+{
+  "name": "shiyi-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "拾遗：灵感与项目管理桌面应用（Tauri 2）",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:mac": "tauri build --target universal-apple-darwin"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

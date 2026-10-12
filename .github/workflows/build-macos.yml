@@ -1,0 +1,50 @@
+name: Build macOS app
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Tauri CLI
+        run: npm install
+
+      - name: Build universal app (Apple Silicon + Intel)
+        run: npx tauri build --target universal-apple-darwin
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "$GITHUB_WORKSPACE/out/"
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          ditto -c -k --keepParent Shiyi.app "$GITHUB_WORKSPACE/out/Shiyi.app.zip"
+          ls -lh "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shiyi-macOS-universal
+          path: out/*
+          if-no-files-found: error
