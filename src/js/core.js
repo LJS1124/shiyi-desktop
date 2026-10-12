@@ -105,7 +105,7 @@ const S = SY.S = {
   ui: Object.assign({
     view: 'today', projectId: null, ptab: 'board', scope: 'all', ideaFilter: 'inbox', tag: '', q: '',
     projArea: 'all', projStatus: 'active', capMode: 'idea', capProject: '', ganttZoom: 'day', ganttHideDone: false,
-    burnMetric: 'count', kbSwim: false, mapId: null, theme: 'system', skin: 'clay'
+    burnMetric: 'count', kbSwim: false, mapId: null, theme: 'system', skin: 'native'
   }, lsGet(LS_UI) || {}),
   view: {}, // transient per-view state (scroll, pan/zoom)
   sel: null
@@ -505,8 +505,10 @@ Object.assign(SY, { openModal, closeModal, toast });
 const SKINS = [['native', 'macOS 原生'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
 SY.SKINS = SKINS;
 function applyTheme() {
-  document.documentElement.dataset.skin = SKINS.some(s => s[0] === S.ui.skin) ? S.ui.skin : 'clay';
+  document.documentElement.dataset.skin = SKINS.some(s => s[0] === S.ui.skin) ? S.ui.skin : 'native';
+  document.documentElement.classList.toggle('is-app', SY.isApp);
   const t = S.ui.theme;
+  try { const w = T && T.window && T.window.getCurrentWindow && T.window.getCurrentWindow(); if (w && w.setTheme) w.setTheme(t === 'light' || t === 'dark' ? t : null).catch(() => {}); } catch (e) {}
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
 }
 SY.applyTheme = applyTheme;

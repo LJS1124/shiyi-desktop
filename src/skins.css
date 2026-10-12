@@ -118,6 +118,24 @@
 [data-skin="native"] .mm-list{border-radius:10px}
 [data-skin="native"] .insp,[data-skin="native"] .modal-card{border-radius:12px}
 [data-skin="native"] .toast{border-radius:10px}
+[data-skin="native"] .btn-ghost{box-shadow:none;background:transparent}
+[data-skin="native"] .btn-ghost:hover{background:rgba(0,0,0,.05)}
+[data-skin="native"][data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.08)}
+[data-skin="native"] .idea-band{display:none}
+[data-skin="native"] .idea{padding:14px 14px 8px}
+[data-skin="native"] .idea .row-acts{border-top:1px solid var(--line)}
+[data-skin="native"] .pcard::before{height:3px}
+[data-skin="native"] .pcard{padding:16px 16px 14px}
+[data-skin="native"] .add-task{border-radius:8px;box-shadow:inset 0 0 0 1px var(--line-2);height:34px}
+[data-skin="native"] .add-task:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--lav) 30%,transparent),inset 0 0 0 1px var(--lav)}
+[data-skin="native"] .tag{color:var(--lav-ink)}
+[data-skin="native"] button.tag{background:var(--lav-soft)}
+[data-skin="native"] .set-sec{border-radius:10px}
+[data-skin="native"] .kbd-hint{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+/* installed app: real macOS sidebar material behind a transparent sidebar */
+.is-app[data-skin="native"] body{background:transparent}
+.is-app[data-skin="native"] .side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.is-app[data-skin="native"] .main{background:var(--bg)}
 
 /* =====================================================================
    mono — 素白高密度
