@@ -707,8 +707,10 @@ $('#capture').addEventListener('submit', e => {
   if (mode === 'idea') {
     const tags = [...text.matchAll(/#([^\s#,，。；;、]+)/g)].map(m => m[1]);
     const body = text.replace(/#[^\s#,，。；;、]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim() || text;
-    put('ideas', { id: SY.newId('ideas'), text: body, note: '', tags: [...new Set(tags)], status: 'inbox', star: false, createdAt: now(), projectId: null });
-    toast('灵感已记下');
+    const idea = put('ideas', { id: SY.newId('ideas'), text: body, note: '', tags: [...new Set(tags)], status: 'inbox', star: false, createdAt: now(), projectId: null });
+    const rel = SY.related ? SY.related(idea.id, { limit: 3 }) : [];
+    if (rel.length) toast(`灵感已记下 · 可能和「${SY.titleOfId(rel[0].id).slice(0, 18)}」${rel.length > 1 ? `等 ${rel.length} 条` : ''}相关`, { action: { label: '看看', fn: () => select('ideas', idea.id) }, ms: 7000 });
+    else toast('灵感已记下');
   } else {
     const due = $('#cap-due').value || null, projectId = $('#cap-project').value || null;
     newTask({ title: text, projectId, due, todayDate: S.ui.view === 'today' && !due ? TODAY() : null });

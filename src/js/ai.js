@@ -236,18 +236,45 @@ SY.acts['ai-mm'] = () => {
 };
 
 /* -------- knowledge graph: find links between ideas and projects -------- */
+const linkPool = () => [
+  ...list('projects').filter(p => p.status !== 'done').map(d => ['projects', d]),
+  ...list('ideas').filter(i => i.status !== 'archived').map(d => ['ideas', d]),
+  ...list('maps').map(d => ['maps', d])
+];
+/* user-triggered only: pick the scope, see the size, then send */
 SY.acts['ai-links'] = () => {
-  const ideas = list('ideas').filter(i => i.status !== 'archived').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 90);
-  const projects = list('projects').filter(p => p.status !== 'done').slice(0, 40);
-  const maps = list('maps').slice(0, 20);
-  if (ideas.length + projects.length + maps.length < 3) { SY.toast('至少要有三条灵感或项目，才找得出关联。'); return; }
+  const pool = linkPool(), since = S.ui.linkSweepAt || 0;
+  if (pool.length < 3) { SY.toast('至少要有三条灵感或项目，才找得出关联。'); return; }
+  const fresh = pool.filter(([, d]) => (d.updatedAt || d.createdAt || 0) > since);
+  const scopeOf = mode => {
+    if (mode === 'all') return { items: pool.slice(0, 150), fresh: new Set() };
+    const ids = new Set(fresh.map(([, d]) => d.id)), keep = new Map(fresh.map(x => [x[1].id, x]));
+    fresh.forEach(([, d]) => (SY.related ? SY.related(d.id, { limit: 6 }) : []).forEach(h => { const x = pool.find(p => p[1].id === h.id); if (x) keep.set(h.id, x); }));
+    pool.filter(([c, d]) => c === 'projects' && d.status === 'active').slice(0, 15).forEach(x => keep.set(x[1].id, x));
+    return { items: [...keep.values()].slice(0, 150), fresh: ids };
+  };
+  const est = sc => Math.round(sc.items.reduce((n, [, d]) => n + String(d.text || d.name || d.title || '').length + String(d.note || d.goal || '').slice(0, 50).length + 12, 900) * 0.9);
+  const inc = scopeOf('new'), all = scopeOf('all');
+  const k = n => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n));
+  SY.openModal('AI 找关联', `<p style="margin:0 0 10px;color:var(--ink-2);font-size:13px">只有你点「开始」才会调用 AI。发送前先选范围：</p>
+    <label class="ai-item" style="grid-template-columns:22px minmax(0,1fr)"><input type="radio" name="lk-scope" value="new" ${fresh.length ? 'checked' : 'disabled'}><span><b>只看${since ? '上次之后' : ''}新增或改过的 ${fresh.length} 条</b>（推荐）<br><span class="te">连同本地算法为它们挑出的候选，共 ${inc.items.length} 条 · 约 ${k(est(inc))} token</span></span></label>
+    <label class="ai-item" style="grid-template-columns:22px minmax(0,1fr)"><input type="radio" name="lk-scope" value="all" ${fresh.length ? '' : 'checked'}><span><b>全部 ${all.items.length} 条</b><br><span class="te">约 ${k(est(all))} token${pool.length > 150 ? '（超过 150 条只取最近的）' : ''}</span></span></label>
+    ${since ? `<p class="te" style="margin:8px 0 0">上次找关联：${SY.fmtTs(since)}</p>` : ''}`,
+    `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="ai-links-go">${SY.icon('spark', 14)}开始</button>`, { iconName: 'spark' });
+  SY.acts['ai-links-go'] = () => { const m = (document.querySelector('input[name=lk-scope]:checked') || {}).value || 'all'; runLinks(m === 'new' ? inc : all); };
+};
+function runLinks(scope) {
+  const ideas = scope.items.filter(x => x[0] === 'ideas').map(x => x[1]);
+  const projects = scope.items.filter(x => x[0] === 'projects').map(x => x[1]);
+  const maps = scope.items.filter(x => x[0] === 'maps').map(x => x[1]);
+  const isNew = d => scope.fresh.has(d.id);
   const key = new Map(), back = new Map();
   const k = (prefix, d, i) => { const s = prefix + (i + 1); key.set(d.id, s); back.set(s, d.id); return s; };
   const one = s => String(s || '').replace(/\s+/g, ' ').trim();
   const lines = [
-    ...projects.map((p, i) => `${k('p', p, i)} | 项目 | ${one(p.name)}${p.goal ? ' — ' + one(p.goal).slice(0, 60) : ''}`),
-    ...ideas.map((x, i) => `${k('i', x, i)} | 灵感 | ${one(x.text).slice(0, 90)}${(x.tags || []).length ? ' #' + x.tags.join(' #') : ''}${x.note ? ' — ' + one(x.note).slice(0, 50) : ''}`),
-    ...maps.map((m, i) => `${k('m', m, i)} | 导图 | ${one(m.title)}`)
+    ...projects.map((p, i) => `${k('p', p, i)}${isNew(p) ? '*' : ''} | 项目 | ${one(p.name)}${p.goal ? ' — ' + one(p.goal).slice(0, 60) : ''}`),
+    ...ideas.map((x, i) => `${k('i', x, i)}${isNew(x) ? '*' : ''} | 灵感 | ${one(x.text).slice(0, 90)}${(x.tags || []).length ? ' #' + x.tags.join(' #') : ''}${x.note ? ' — ' + one(x.note).slice(0, 50) : ''}`),
+    ...maps.map((m, i) => `${k('m', m, i)}${isNew(m) ? '*' : ''} | 导图 | ${one(m.title)}`)
   ].join('\n');
   const have = list('links').filter(l => key.has(l.source) && key.has(l.target)).map(l => `${key.get(l.source)}-${key.get(l.target)}`);
   const g = SY.graph.build();
@@ -259,7 +286,7 @@ ${lines}
 
 已经有关系的对（不要重复）：${[...new Set(have)].join('，') || '无'}
 
-请找出 4 到 12 对真正有意义、用户自己可能没意识到的关联：同一个问题的不同解法、一个灵感能推进某个项目、两条灵感可以合并、观点相互矛盾等。不要因为都属于“效率”“生活”这种宽泛主题就连起来。
+${scope.fresh.size ? '编号后带 * 的是新增或刚改过的条目，每一对关联里至少要有一条带 *（输出编号时去掉 *）。\n' : ''}请找出 4 到 12 对真正有意义、用户自己可能没意识到的关联：同一个问题的不同解法、一个灵感能推进某个项目、两条灵感可以合并、观点相互矛盾等。不要因为都属于“效率”“生活”这种宽泛主题就连起来。
 relation 只能是：${Object.keys(RELS).join('、')}。a→b 的方向要读得通，比如「a supports b」「a inspired_by b」。why 用一句话（不超过 30 个字）说明理由。confidence 是 0 到 1 的把握程度。用简体中文。
 只回复 JSON：{"links":[{"a":"i3","b":"p1","relation":"supports","why":"...","confidence":0.8}]}`;
   SY.runAI({
@@ -277,6 +304,7 @@ relation 只能是：${Object.keys(RELS).join('、')}。a→b 的方向要读得
       const fd = new FormData($('#ai-form')), picks = fd.getAll('pick').map(Number);
       let n = 0;
       picks.forEach(k => { const c = SY.aiLinkCands[k]; if (!c) return; const l = SY.createLink(c.a, c.b, String(fd.get('r' + k) || c.relation), c.why, 'confirmed'); if (l) { if (l.confidence == null) SY.patch('links', l.id, { confidence: c.confidence }); n++; } });
+      S.ui.linkSweepAt = Date.now(); SY.saveUI();
       SY.closeModal(); SY.toast(`已建立 ${n} 条关联`);
       if (S.ui.view !== 'graph') SY.setView('graph');
     }

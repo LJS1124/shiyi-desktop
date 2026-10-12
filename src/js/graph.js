@@ -96,6 +96,26 @@ function build() {
 }
 SY.graph = { build, wikilinks, resolveTitle: t => resolve(build().ix, t) };
 
+/* ---------- possibly related (local text similarity, no AI) ---------- */
+S.ui.relNo = Array.isArray(S.ui.relNo) ? S.ui.relNo : [];
+const pairKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+let relMemo = { rev: -1, items: null };
+function relItems() {
+  if (relMemo.rev !== S.rev) relMemo = { rev: S.rev, items: ENT.flatMap(col => list(col).map(d => ({ id: d.id, type: SY.TYPE[col], doc: d }))) };
+  return relMemo.items;
+}
+SY.related = (id, { limit = 3, text = null } = {}) => {
+  const lib = window.ShiyiRelated; if (!lib) return [];
+  let exclude;
+  if (id) {
+    exclude = new Set();
+    build().edges.forEach(e => { if (e.source === id) exclude.add(e.target); if (e.target === id) exclude.add(e.source); });
+    list('links').forEach(l => { if (l.source === id) exclude.add(l.target); if (l.target === id) exclude.add(l.source); });
+    S.ui.relNo.forEach(k => { const [a, b] = k.split('|'); if (a === id) exclude.add(b); if (b === id) exclude.add(a); });
+  }
+  return lib.rank(relItems(), id ? { targetId: id, limit, exclude } : { text, limit });
+};
+
 /* ---------- opening things ---------- */
 function openEntity(id) {
   if (String(id).startsWith('tag:')) { S.ui.view = 'ideas'; S.ui.ideaFilter = 'all'; S.ui.tag = id.slice(4); SY.saveUI(); SY.renderAll(); return; }
@@ -180,8 +200,20 @@ SY.relSection = (col, id) => {
   return `<div class="field col1"><span class="lbl" style="display:flex;gap:10px;align-items:center">关联与反向链接
       <button type="button" class="linkish" data-act="g-link-new" data-id="${esc(id)}">＋ 关联到…</button>
       <button type="button" class="linkish" data-act="g-focus" data-id="${esc(id)}">在图谱中看</button></span>
-    <div class="rels">${rows.join('') || '<span class="te">还没有关联。在备注里写 [[标题]] 也能连上。</span>'}</div></div>`;
+    <div class="rels">${rows.join('') || '<span class="te">还没有关联。在备注里写 [[标题]] 也能连上。</span>'}</div>${maybeRows(id)}</div>`;
 };
+function maybeRows(id) {
+  const hits = SY.related(id, { limit: 3 });
+  if (!hits.length) return '';
+  return `<div class="maybe"><div class="maybe-h">可能相关 <span class="te">· 按文字相似度，不调用 AI</span></div>
+    ${hits.map(h => `<div class="rel is-maybe" title="${esc(h.shared.concat(h.tags.map(t => '#' + t)).join('、'))}">
+      <span class="tchip t-${h.type}">${TYPE_CN[h.type]}</span>
+      <button type="button" class="linkish rel-t" data-act="g-open" data-id="${esc(h.id)}">${esc(nameOf(h.id))}</button>
+      <span class="maybe-why">${esc(h.shared.concat(h.tags.map(t => '#' + t)).slice(0, 2).join('、'))}</span>
+      <button type="button" class="mini" data-act="rel-yes" data-a="${esc(id)}" data-b="${esc(h.id)}" title="连上（相关）">${icon('plus', 12)}连上</button>
+      <button type="button" class="mini" data-act="rel-no" data-a="${esc(id)}" data-b="${esc(h.id)}" title="不相关，不再推荐">${icon('x', 12)}</button>
+    </div>`).join('')}</div>`;
+}
 
 /* ---------- graph view ---------- */
 function visible() {
@@ -264,6 +296,8 @@ SY.views.graph = {
     const total = [...g.nodes.values()].filter(n => n.type !== 'tag').length;
     const sug = list('links').filter(l => l.status === 'suggested' && g.nodes.has(l.source) && g.nodes.has(l.target));
     const isolated = [...g.nodes.values()].filter(n => n.type === 'idea' && n.deg === 0).length;
+    const since = S.ui.linkSweepAt || 0;
+    const freshN = [...list('ideas').filter(i => i.status !== 'archived'), ...list('projects').filter(p => p.status !== 'done'), ...list('maps')].filter(d => (d.updatedAt || d.createdAt || 0) > since).length;
     layout(v.nodes, v.edges, !G.laidOut);
     G.laidOut = true;
     const ns = [...v.nodes.values()];
@@ -294,7 +328,7 @@ SY.views.graph = {
     const card = graphCard(v);
     const empty = !total;
     return `<div class="vh"><div><h1>知识图谱</h1><div class="sub">灵感、项目、任务和导图之间的关系：手动关联、AI 建议、备注里的 [[双链]]、相同的标签，以及项目归属和依赖。</div></div>
-        <div class="vh-acts"><button type="button" class="btn btn-ai ai" data-act="ai-links">${icon('spark', 15)}AI 找关联</button></div></div>
+        <div class="vh-acts"><button type="button" class="btn btn-ai ai" data-act="ai-links" title="手动触发，发送前会先告诉你范围和大约的 token">${icon('spark', 15)}AI 找关联${freshN ? `<span class="n" style="margin-left:4px;opacity:.7">${freshN} 条新内容</span>` : ''}</button></div></div>
       <div class="toolbar">${typeChip('idea', '灵感')}${typeChip('project', '项目')}${typeChip('task', '任务')}${typeChip('map', '导图')}${typeChip('tag', '标签')}
         <button type="button" class="chip ${o.done ? 'is-on' : ''}" data-act="g-done">含已完成 / 归档</button>
         <button type="button" class="chip ${o.suggested ? 'is-on' : ''}" data-act="g-sug">AI 建议${sug.length ? `<span class="n">${sug.length}</span>` : ''}</button>
@@ -477,7 +511,9 @@ Object.assign(SY.acts, {
   },
   'link-ok': el => { const l = S.data.links.get(el.dataset.id); if (l) { SY.patch('links', l.id, { status: 'confirmed' }); SY.toast('已接受这条关联'); } },
   'link-ok-all': () => { const sug = list('links').filter(l => l.status === 'suggested'); SY.withNote('接受全部 AI 建议', () => sug.forEach(l => SY.patch('links', l.id, { status: 'confirmed' }))); SY.toast(`已接受 ${sug.length} 条关联`); },
-  'link-del': el => delLink(el.dataset.id)
+  'link-del': el => delLink(el.dataset.id),
+  'rel-yes': el => { const l = createLink(el.dataset.a, el.dataset.b, 'relates_to', '', 'confirmed'); SY.toast(`已关联「${short(nameOf(el.dataset.b), 14)}」`, { undo: () => l && SY.remove('links', l.id) }); },
+  'rel-no': el => { S.ui.relNo = [...S.ui.relNo, pairKey(el.dataset.a, el.dataset.b)].slice(-500); SY.saveUI(); S.rev++; SY.renderAll(); }
 });
 SY.changeHandlers.push(e => {
   const el = e.target;

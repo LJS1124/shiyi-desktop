@@ -679,3 +679,10 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .cmd{display:flex;align-items:center;gap:6px;margin-top:6px}
 .cmd code{padding:5px 9px;user-select:all;word-break:break-all}
 .skill-pre{white-space:pre-wrap;font-family:var(--f-mono);font-size:12px;line-height:1.6;max-height:60vh;overflow:auto;margin:0;padding:12px;border-radius:12px;background:var(--clay-2)}
+
+/* possibly related */
+.maybe{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line-2);display:flex;flex-direction:column;gap:2px}
+.maybe-h{font-size:11.5px;font-weight:700;color:var(--ink-3)}
+.maybe-h .te{font-weight:500;font-size:11px;color:var(--ink-3)}
+.rel.is-maybe .rel-t{color:var(--ink-2);font-weight:500}
+.maybe-why{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-3)}
