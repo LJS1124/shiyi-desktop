@@ -69,7 +69,7 @@
 
 ### 深色模式和六种风格
 
-默认是 macOS 原生风格。「设置 → 外观」里还有素白高密度、暗夜专业、宣纸水墨、新粗野、黏土五种风格，每种都有浅色和深色。
+默认是原生风格（macOS 上侧栏是系统的毛玻璃）。「设置 → 外观」里还有素白高密度、暗夜专业、宣纸水墨、新粗野、黏土五种风格，每种都有浅色和深色。
 
 ![深色模式](docs/screenshots/graph-dark.png)
 
@@ -157,9 +157,9 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 
 | 按键 | 作用 |
 | --- | --- |
-| <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框（关闭窗口后应用仍在后台，<kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出） |
+| <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框。macOS 上关闭窗口后应用仍在后台，<kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出；Windows 上关闭窗口就是退出，要用这个快捷键得保持应用运行 |
 | <kbd>⌘</kbd><kbd>K</kbd> | 聚焦记录框；以 `/t ` 开头直接记成任务 |
-| <kbd>⌘</kbd><kbd>1</kbd>–<kbd>⌘</kbd><kbd>8</kbd> | 切换视图 |
+| <kbd>⌘</kbd><kbd>1</kbd>–<kbd>8</kbd> | 切换视图 |
 | `[[` | 在记录框和备注里弹出条目列表，选中即插入双链 |
 | <kbd>Esc</kbd> | 关闭详情 |
 
@@ -169,7 +169,7 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 - **备份**：每天自动备份一份到 `backups/shiyi-日期.db`，保留最近 14 天；操作记录保留 180 天。
 - **导出 / 导入**：「设置 → 数据」可以导出、导入 JSON。网页预览导出的备份和旧版备份都能导入，导入本身也能撤销。
 - **从旧版升级**：升级时会自动把旧的 `data.json` 导入数据库，原文件改名为 `data.json.imported`。
-- **API Key**：存在同目录的 `settings.json` 里，macOS 上文件权限是 600，Windows 上放在你的用户目录里，不会离开本机。
+- **API Key**：存在同目录的 `settings.json` 里，不会离开本机（macOS 上文件权限是 600）。
 
 ## 架构
 
@@ -178,20 +178,19 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
   <img src="docs/architecture-light.png" alt="架构图：界面和命令行都经过 shiyi-core 写入同一个 SQLite 数据库，其他进程写入后界面自动刷新" width="100%">
 </picture>
 
-<sub>图的源文件是 [`docs/architecture.mmd`](docs/architecture.mmd)，改完后用 mermaid-cli 重新生成两张 PNG。</sub>
-
 - 所有写入都经过 `shiyi-core`：先校验，再检查权限，然后整批写入（要么全部成功，要么全部不生效），同时记下修改前后的快照，所以任何一批都能撤销。
 - 界面和命令行打开的是同一个数据库文件。应用会监听其他进程的写入：AI 改了数据，界面会自动刷新，并弹出提示「某某改了几处」。
 - 网页预览（不装应用）用的是同一套界面，数据和操作记录存在浏览器里。
 
 ## 本地开发
 
-需要 Rust（`rustup`）、Node 18+ 和 Xcode Command Line Tools。
+需要 Rust（`rustup`）和 Node 18+。macOS 还要 Xcode Command Line Tools，Windows 还要 Visual Studio 的「C++ 桌面开发」生成工具。
 
 ```bash
 npm install
 npm run dev                                   # 开发模式
-npm run build:mac                             # 打包 universal .app 和 .dmg
+npm run build:mac                             # macOS：打包 universal .app 和 .dmg
+npm run build                                 # Windows：打包 NSIS 安装包
 
 cd core && cargo test                         # 数据层与命令行的测试
 cargo run --bin shiyi -- today --pretty       # 直接用命令行（SHIYI_DB=/tmp/x.db 用测试库）
@@ -224,6 +223,7 @@ core/                 数据层（Rust）：SQLite、操作与撤销、知识图
   src/graph.rs        知识图谱（显式关联 + 字段 + [[双链]] + 标签）
   src/related.rs      可能相关（字的二元组 + TF-IDF，不调 AI）
   src/cli.rs          命令行
+  src/install.rs      命令行启动脚本（sh / cmd）、home 目录、PATH 提示
   tests/              数据层、命令行、相关推荐、修改摘要的测试
 skills/shiyi/         给 AI 的技能说明（SKILL.md，也编进了应用）
 src/                  界面（无构建步骤）
@@ -235,6 +235,9 @@ src/                  界面（无构建步骤）
   js/views-main.js    今日 / 灵感 / 项目
   js/kanban.js  gantt.js  burndown.js  pert.js  mindmap.js  ai.js
 src-tauri/            Rust 外壳：接入 core、监听 AI 的修改、安装命令行和技能、AI 代理、导入导出、全局快捷键
+  tauri.conf.json     macOS 的窗口和打包配置
+  tauri.windows.conf.json  Windows 的覆盖配置（系统标题栏、NSIS 安装包）
 scripts/              预览打包、端到端测试、截图
-docs/screenshots/     README 截图
+docs/                 README 截图（screenshots/）、架构图、每个版本的发布说明（releases/）
+.github/workflows/    test.yml 日常测试；build.yml 编译 macOS 和 Windows 并发布
 ```
