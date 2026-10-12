@@ -6,7 +6,7 @@ use crate::{Error, Result};
 use serde_json::{json, Map, Value};
 use std::io::{IsTerminal, Read, Write};
 
-const HELP: &str = r#"十一遗 shiyi — ideas, projects, tasks and a knowledge graph, for humans and AI agents.
+const HELP: &str = r#"拾忆 shiyi — ideas, projects, tasks and a knowledge graph, for humans and AI agents.
 Output is JSON: {"ok":true,…} or {"ok":false,"error":{"code","message","hint"}}. Exit 0 ok, 1 error, 2 usage.
 
 READ
@@ -46,7 +46,7 @@ OTHER
   shiyi export [file]  |  shiyi import <file>
 
 GLOBAL FLAGS
-  --as <agent name>   who is acting (default: $SHIYI_AGENT or "cli"); shows up in 十一遗's 操作记录
+  --as <agent name>   who is acting (default: $SHIYI_AGENT or "cli"); shows up in 拾忆's 操作记录
   --dry-run           validate and preview without saving
   --db <path>         database file (default: $SHIYI_DB or the app's data folder)
   --pretty | --compact

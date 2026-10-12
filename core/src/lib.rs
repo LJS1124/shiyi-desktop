@@ -1,4 +1,4 @@
-//! 十一遗 core.
+//! 拾忆 core.
 //!
 //! One SQLite file holds every idea, project, task, mind map and link as a JSON
 //! document. Every change goes through [`Core::apply`], which validates the

@@ -1,4 +1,4 @@
-//! 十一遗 desktop backend: the shiyi-core SQLite store (shared with the `shiyi`
+//! 拾忆 desktop backend: the shiyi-core SQLite store (shared with the `shiyi`
 //! CLI that AI agents use), a watcher that tells the window when an agent
 //! changed something, settings, the AI proxy, import/export dialogs, CLI and
 //! skill installers, and the global quick-capture shortcut.
@@ -170,7 +170,13 @@ fn reveal_data_dir(store: State<'_, Store>) -> Result<(), String> {
 
 // ---------- AI access: CLI + skill ----------
 
-const CLI_MARK: &str = "# 十一遗命令行";
+const CLI_MARK: &str = "# 拾忆命令行";
+/// Marker written by versions before the rename, still recognised as ours.
+const CLI_MARK_OLD: &str = "# 十一遗命令行";
+
+fn is_our_cli(text: &str) -> bool {
+    text.contains(CLI_MARK) || text.contains(CLI_MARK_OLD)
+}
 
 fn cli_targets() -> Vec<PathBuf> {
     vec![home().join(".local/bin/shiyi"), PathBuf::from("/usr/local/bin/shiyi"), PathBuf::from("/opt/homebrew/bin/shiyi")]
@@ -184,7 +190,7 @@ fn skill_path() -> PathBuf {
 fn cli_status(store: State<'_, Store>) -> Value {
     let installed: Vec<String> = cli_targets()
         .into_iter()
-        .filter(|p| fs::read_to_string(p).map(|t| t.contains(CLI_MARK)).unwrap_or(false))
+        .filter(|p| fs::read_to_string(p).map(|t| is_our_cli(&t)).unwrap_or(false))
         .map(|p| p.display().to_string())
         .collect();
     let skill = skill_path();
@@ -209,9 +215,9 @@ fn install_cli() -> Result<Value, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_s = exe.display().to_string();
     if exe_s.contains("/AppTranslocation/") || exe_s.contains("/Volumes/") {
-        return Err("先把十一遗拖进「应用程序」文件夹并从那里打开，再安装命令行工具。".into());
+        return Err("先把拾忆拖进「应用程序」文件夹并从那里打开，再安装命令行工具。".into());
     }
-    let script = format!("#!/bin/sh\n{CLI_MARK}（由十一遗安装；重新安装应用后在 设置 → AI 接入 里再点一次安装）\nexec {} --cli \"$@\"\n", sh_quote(&exe_s));
+    let script = format!("#!/bin/sh\n{CLI_MARK}（由拾忆安装；重新安装应用后在 设置 → AI 接入 里再点一次安装）\nexec {} --cli \"$@\"\n", sh_quote(&exe_s));
     let mut written = vec![];
     let mut errors = vec![];
     for (i, target) in cli_targets().into_iter().enumerate() {
@@ -228,7 +234,7 @@ fn install_cli() -> Result<Value, String> {
             continue;
         }
         // never overwrite somebody else's `shiyi`
-        if target.exists() && !fs::read_to_string(&target).map(|t| t.contains(CLI_MARK)).unwrap_or(false) {
+        if target.exists() && !fs::read_to_string(&target).map(|t| is_our_cli(&t)).unwrap_or(false) {
             continue;
         }
         match fs::write(&target, &script) {
@@ -453,13 +459,13 @@ fn open_store(app: &AppHandle) -> Store {
         Ok(mut core) => {
             if let Ok(dir) = data_dir(app) {
                 match core.import_legacy_file_once(&dir.join("data.json")) {
-                    Ok(Some(r)) => eprintln!("十一遗: imported data.json ({} items)", r["imported"]),
+                    Ok(Some(r)) => eprintln!("拾忆: imported data.json ({} items)", r["imported"]),
                     Ok(None) => {}
-                    Err(e) => eprintln!("十一遗: data.json import failed: {e}"),
+                    Err(e) => eprintln!("拾忆: data.json import failed: {e}"),
                 }
             }
             if let Err(e) = core.backup_daily(KEEP_BACKUPS) {
-                eprintln!("十一遗: backup failed: {e}");
+                eprintln!("拾忆: backup failed: {e}");
             }
             Store { core: Mutex::new(Some(core)), error: None, path }
         }
@@ -526,7 +532,7 @@ pub fn run() {
             ai_complete
         ])
         .build(tauri::generate_context!())
-        .expect("error while building 十一遗");
+        .expect("error while building 拾忆");
 
     app.run(|app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = &event {

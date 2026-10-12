@@ -1,4 +1,4 @@
-/* 十一遗 AI flows: every result is previewed and edited before it is written */
+/* 拾忆 AI flows: every result is previewed and edited before it is written */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

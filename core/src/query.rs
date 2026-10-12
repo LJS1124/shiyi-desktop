@@ -610,7 +610,7 @@ fn counts(conn: &Connection) -> Result<Value> {
 
 fn status(core: &Core, clock: &Clock) -> Result<Value> {
     Ok(json!({
-        "app": "十一遗",
+        "app": "拾忆",
         "version": crate::VERSION,
         "db": core.path().map(|p| p.display().to_string()),
         "schema_version": core.meta_get("schema_version")?,

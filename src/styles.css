@@ -1,4 +1,4 @@
-/* 十一遗 · 黏土风桌面端
+/* 拾忆 · 黏土风桌面端
    Layout: 悬浮黏土侧栏 + 顶部快速记录条 + 宽主区（列表 / 看板 / 时间轴 / 画布），右侧检视抽屉。
    Clay = 圆润大圆角 + 外投影 + 内高光/内阴影，柔和糖果色。 */
 :root{
@@ -274,7 +274,8 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .idea-text{margin:0;font-size:14.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;font-weight:550}
 .idea .star{position:absolute;right:10px;top:10px}
 .idea .idea-text{padding-right:26px}
-.idea .row-acts{display:flex;flex-wrap:wrap;gap:2px;margin:0 -6px -4px;border-top:1px dashed var(--line-2);padding-top:6px}
+.idea .row-acts{display:flex;flex-wrap:wrap;gap:0;margin:0 -6px -4px;border-top:1px dashed var(--line-2);padding-top:6px}
+.idea .row-acts .mini{padding:0 8px}
 .star{width:28px;height:28px;display:grid;place-items:center;color:var(--ink-3);border-radius:10px}
 .star:hover{color:var(--butter-ink);background:var(--butter-soft)}
 .star.is-on{color:var(--butter)}
@@ -534,7 +535,8 @@ button.tag.is-on{background:var(--lav);color:#fff}
 /* ---------- toast ---------- */
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,18px);padding:11px 12px 11px 18px;font-size:13px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;display:flex;align-items:center;gap:14px;max-width:calc(100% - 40px);font-weight:600;border-radius:18px;box-shadow:var(--sh-float),var(--sh-in)}
 .toast.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-.toast button{color:var(--lav-ink);font-weight:800;padding:4px 10px;border-radius:10px}
+.toast button{color:var(--lav-ink);font-weight:800;padding:4px 10px;border-radius:10px;white-space:nowrap;flex:none}
+.toast>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button:hover{background:var(--lav-soft)}
 
 .skel{display:flex;flex-direction:column;gap:12px;padding:8px}

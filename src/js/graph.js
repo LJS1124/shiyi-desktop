@@ -1,4 +1,4 @@
-/* 十一遗 knowledge graph: explicit links + edges derived from fields,
+/* 拾忆 knowledge graph: explicit links + edges derived from fields,
    [[wikilinks]] and shared tags (same rules as `shiyi graph` in the core). */
 (() => {
 'use strict';

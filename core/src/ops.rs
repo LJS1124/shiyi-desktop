@@ -186,7 +186,7 @@ impl<'a> Ctx<'a> {
 
     fn require_write(&self) -> Result<()> {
         if !self.is_user() && self.perm == Perm::Read {
-            return Err(Error::new("permission_denied", "agents may only read 十一遗 right now (permission: read)")
+            return Err(Error::new("permission_denied", "agents may only read 拾忆 right now (permission: read)")
                 .hint("ask the user to change 设置 → AI 接入 → 权限 to 可写 (write)"));
         }
         Ok(())
@@ -683,7 +683,7 @@ impl<'a> Ctx<'a> {
             "link" => {
                 if !self.may_confirm_links() && s(&before, "status") != "confirmed" && s(&after, "status") == "confirmed" {
                     return Err(Error::new("permission_denied", "only the user can accept a suggested link")
-                        .hint("leave it as a suggestion; the user accepts it in 十一遗 (知识图谱 → 待确认的关联), or raises 设置 → AI 接入 → 权限 to 完全 (full)"));
+                        .hint("leave it as a suggestion; the user accepts it in 拾忆 (知识图谱 → 待确认的关联), or raises 设置 → AI 接入 → 权限 to 完全 (full)"));
                 }
                 if before.get("source") != after.get("source") || before.get("target") != after.get("target") || before.get("relation") != after.get("relation") {
                     if let Some(ex) = self.prepare_link(&id, &mut after)? {
@@ -1121,7 +1121,7 @@ impl<'a> Ctx<'a> {
         if !self.is_user() {
             self.require_write()?;
             if live.iter().any(|r| !r.1.starts_with("agent:")) && self.perm < Perm::Full {
-                return Err(Error::new("permission_denied", "agents with write permission can only undo changes made by agents").hint("ask the user to undo it in 十一遗 (操作记录), or to raise the permission to 完全 (full)"));
+                return Err(Error::new("permission_denied", "agents with write permission can only undo changes made by agents").hint("ask the user to undo it in 拾忆 (操作记录), or to raise the permission to 完全 (full)"));
             }
         }
         // per entity: earliest before, latest after

@@ -1,4 +1,4 @@
-/* 十一遗 gantt: timeline with drag-to-move / resize, dependency arrows, critical tasks, zoom */
+/* 拾忆 gantt: timeline with drag-to-move / resize, dependency arrows, critical tasks, zoom */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

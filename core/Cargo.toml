@@ -2,7 +2,7 @@
 name = "shiyi-core"
 version = "1.1.0"
 edition = "2021"
-description = "十一遗 core: SQLite store, operation log with undo, knowledge graph, and the `shiyi` CLI for humans and AI agents"
+description = "拾忆 core: SQLite store, operation log with undo, knowledge graph, and the `shiyi` CLI for humans and AI agents"
 license = "MIT"
 publish = false
 

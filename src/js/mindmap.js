@@ -1,4 +1,4 @@
-/* 十一遗 mind map: balanced tree layout, keyboard editing, drag to reparent, undo, convert to tasks/ideas */
+/* 拾忆 mind map: balanced tree layout, keyboard editing, drag to reparent, undo, convert to tasks/ideas */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

@@ -26,7 +26,7 @@ fn map_id(prefix: &str, old: &str) -> String {
 
 pub fn import(core: &mut Core, data: Value, actor: &str) -> Result<Value> {
     if !data.is_object() {
-        return Err(Error::new("invalid_request", "import expects a JSON object").hint("a 十一遗 backup (.json)"));
+        return Err(Error::new("invalid_request", "import expects a JSON object").hint("a 拾忆 backup (.json)"));
     }
     let snapshot = data.get("format").and_then(Value::as_str) == Some("shiyi.snapshot")
         || data.get("links").is_some()

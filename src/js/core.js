@@ -1,4 +1,4 @@
-/* 十一遗 core: utilities, state, storage, render loop, inspector, modal, settings */
+/* 拾忆 core: utilities, state, storage, render loop, inspector, modal, settings */
 (() => {
 'use strict';
 const SY = window.SY = { views: {}, mods: {}, acts: {}, changeHandlers: [] };
@@ -259,7 +259,7 @@ function renderNav() {
 function renderStatus() {
   const el = $('#side-foot'); if (!el) return;
   const cls = S.saveErr ? 'is-err' : SY.isApp ? '' : 'is-local';
-  const txt = S.saveErr ? '保存出错：' + S.saveErr : SY.isApp ? '已保存到本机 · AI 可通过命令行访问' : '网页预览 · 数据存在这个浏览器里';
+  const txt = S.saveErr ? '保存出错：' + S.saveErr : SY.isApp ? '已保存到本机' : '网页预览 · 数据存在浏览器里';
   el.innerHTML = `<span class="status ${cls}"><i></i>${txt}</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm btn-ghost" type="button" data-act="export">${icon('down', 14)}导出</button>
@@ -525,7 +525,7 @@ function applyTheme() {
 SY.applyTheme = applyTheme;
 async function openSettings() {
   let st = { apiFormat: 'anthropic', apiBase: '', model: 'claude-sonnet-5-5', quickModel: 'claude-haiku-5-5', hasKey: false, dataPath: '' };
-  if (invoke) { try { st = { ...st, ...(await invoke('get_settings')) }; } catch (e) { toast('读取设置失败：' + e); } }
+  if (invoke) { try { st = { ...st, ...(await invoke('get_settings')) }; } catch (e) { toast('读取设置失败：' + SY.errText(e)); } }
   const th = S.ui.theme;
   if (SY.loadAiAccess) SY.loadAiAccess();
   openModal('设置', `
@@ -556,7 +556,7 @@ async function openSettings() {
       </div>
     </div>
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">⌥⇧Space</b> 在任何应用里唤出十一遗并聚焦记录框 · <b class="mono">⌘K</b> 聚焦记录框 · <b class="mono">⌘1–⌘8</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">⌥⇧Space</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">⌘K</b> 聚焦记录框 · <b class="mono">⌘1–⌘8</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear' });
 }
@@ -610,7 +610,7 @@ SY.parseJSON = text => {
 
 /* ================= export / import ================= */
 async function doExport() {
-  const fileName = `十一遗备份-${TODAY()}.json`;
+  const fileName = `拾忆备份-${TODAY()}.json`;
   if (invoke) {
     await SY.store.flush();
     try { const ok = await invoke('core_export', { fileName }); if (ok) toast('备份已导出'); } catch (e) { toast('导出失败：' + SY.errText(e)); }
@@ -627,7 +627,7 @@ async function doExport() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 function importObj(obj) {
-  if (!obj || typeof obj !== 'object') { toast('这个文件不是十一遗的备份。'); return; }
+  if (!obj || typeof obj !== 'object') { toast('这个文件不是拾忆的备份。'); return; }
   const n = SY.withNote('导入备份', () => SY.store.importLocal(obj));
   toast(n ? `导入完成，共 ${n} 条` : '文件里没有可导入的内容。');
 }

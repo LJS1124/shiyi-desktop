@@ -42,6 +42,10 @@ if not args.preview:
 def call(cmd, a):
     if cmd == "skill_text":
         return {"ok": (ROOT / "skills/shiyi/SKILL.md").read_text(encoding="utf-8")}
+    if cmd == "get_settings":
+        return {"ok": {"apiFormat": "anthropic", "apiBase": "", "model": "claude-sonnet-5-5", "quickModel": "claude-haiku-5-5", "hasKey": True, "dataPath": args.db}}
+    if cmd == "save_settings":
+        return {"ok": None}
     if cmd == "cli_status":
         return {"ok": {"installed": [], "skill_installed": False, "skill_current": False, "db": args.db}}
     with lock:

@@ -1,4 +1,4 @@
-/* 十一遗 store: the one write path of the GUI.
+/* 拾忆 store: the one write path of the GUI.
    App: every change becomes an operation on the shiyi-core SQLite database,
    the same one AI agents use through the `shiyi` CLI. The database keeps an
    operation log with before/after snapshots, so anything can be undone.

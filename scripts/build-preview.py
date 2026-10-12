@@ -29,7 +29,7 @@ import json
 skill = (ROOT / "skills" / "shiyi" / "SKILL.md").read_text(encoding="utf-8")
 js = "window.__SHIYI_SKILL__ = " + json.dumps(skill, ensure_ascii=False).replace("</", "<\\/") + ";\n" + js
 
-page = f"""<title>十一遗</title>
+page = f"""<title>拾忆</title>
 <style>
 {css}
 </style>

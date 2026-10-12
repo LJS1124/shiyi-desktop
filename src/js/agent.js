@@ -1,4 +1,4 @@
-/* 十一遗 AI access: the operation log view (every change, by you or by an
+/* 拾忆 AI access: the operation log view (every change, by you or by an
    AI agent through the `shiyi` CLI, with undo) and the 设置 → AI 接入 section. */
 (() => {
 'use strict';
@@ -148,7 +148,7 @@ SY.views.log = {
 SY.aiAccessSection = () => {
   const cur = S.permission || 'write', p = PERM.find(x => x[0] === cur) || PERM[1];
   return `<div class="set-sec"><h3>AI 接入</h3>
-    <p>让任何能运行命令的 AI 助手（Claude Code、Codex、Cursor、自己写的 agent…）通过 <code>shiyi</code> 命令行读写十一遗：记灵感、拆项目、排日程、找关联。它们的每一处修改都会出现在「操作记录」里，可以一键撤销。</p>
+    <p>让任何能运行命令的 AI 助手（Claude Code、Codex、Cursor、自己写的 agent…）通过 <code>shiyi</code> 命令行读写拾忆：记灵感、拆项目、排日程、找关联。它们的每一处修改都会出现在「操作记录」里，可以一键撤销。</p>
     <div class="field"><span class="lbl">AI 权限</span><div class="seg seg-sm" id="s-perm">${PERM.map(([k, l]) => `<button type="button" class="${cur === k ? 'is-on' : ''}" data-act="perm" data-v="${k}">${l}</button>`).join('')}</div></div>
     <p class="te" id="s-perm-desc" style="margin-top:-4px">${p[2]}</p>
     ${invoke ? `<div class="ai-steps">
@@ -159,7 +159,7 @@ SY.aiAccessSection = () => {
         <div class="te">告诉 AI 这个软件怎么用。Claude Code 会自动读取 ~/.claude/skills；别的 AI 可以把说明粘进它的提示词。</div>
         <div class="ai-step-a"><button class="btn btn-sm" type="button" data-act="install-skill">${icon('down', 14)}安装到 Claude Code</button><button class="btn btn-sm btn-ghost" type="button" data-act="copy-skill">${icon('copy', 14)}复制技能说明</button></div><div id="s-skill-out" class="te"></div></div></div>
       <div class="ai-step"><b>3</b><div><div class="ai-step-t">试一试</div>
-        <div class="te">在终端运行下面的命令，或者直接对 AI 说「看看我十一遗里今天要做什么」。</div>
+        <div class="te">在终端运行下面的命令，或者直接对 AI 说「看看我拾忆里今天要做什么」。</div>
         <div class="cmd"><code>shiyi today --pretty</code><button class="mini" type="button" data-act="copy-cmd" data-v="shiyi today --pretty">${icon('copy', 12)}</button></div></div></div>
     </div>` : `<p class="te">网页预览里不能连接命令行；装上 Mac 版后在这里一键安装。你可以先看看给 AI 的技能说明：</p>
       <div class="ai-step-a"><button class="btn btn-sm" type="button" data-act="copy-skill">${icon('copy', 14)}复制技能说明</button><button class="btn btn-sm btn-ghost" type="button" data-act="view-skill">查看</button></div>`}

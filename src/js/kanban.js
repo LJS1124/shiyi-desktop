@@ -1,4 +1,4 @@
-/* 十一遗 kanban: status columns, optional project swimlanes, pointer drag with ordering */
+/* 拾忆 kanban: status columns, optional project swimlanes, pointer drag with ordering */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;
