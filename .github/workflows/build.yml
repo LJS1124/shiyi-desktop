@@ -115,13 +115,20 @@ jobs:
         # what an AI agent does: run `shiyi --cli …` with pipes and read JSON
         env:
           SHIYI_DB: ${{ runner.temp }}/smoke.db
+          PYTHONUTF8: '1'
         run: |
           exe=$(ls src-tauri/target/release/*.exe | head -1)
           echo "using $exe"
-          "$exe" --cli status | tee status.json
-          python -c "import json; d=json.load(open('status.json', encoding='utf-8')); assert d['ok'], d"
-          "$exe" --cli idea add "冒烟测试：中文也要能存" --as ci | python -c "import sys, json; d=json.load(sys.stdin); assert d['ok'], d"
-          "$exe" --cli search 冒烟 | python -c "import sys, json; d=json.load(sys.stdin); assert d['ok'] and '冒烟' in json.dumps(d, ensure_ascii=False), d"
+          fail() { echo "::error::smoke test: $1"; for f in smoke-*.out smoke-*.err; do [ -f "$f" ] && echo "::error::$f: $(head -c 600 "$f" | tr '\r\n' '  ')"; done; exit 1; }
+          "$exe" --cli status > smoke-1.out 2> smoke-1.err || fail "status exited with $?"
+          python -c "import json; d=json.load(open('smoke-1.out', encoding='utf-8')); assert d['ok'], d" 2> smoke-1.py || fail "status is not ok JSON ($(head -c 300 smoke-1.py))"
+          "$exe" --cli idea add "冒烟测试：中文也要能存" --as ci > smoke-2.out 2> smoke-2.err || fail "idea add exited with $?"
+          python -c "import json; d=json.load(open('smoke-2.out', encoding='utf-8')); assert d['ok'], d" 2> smoke-2.py || fail "idea add is not ok JSON ($(head -c 300 smoke-2.py))"
+          "$exe" --cli search 冒烟 > smoke-3.out 2> smoke-3.err || fail "search exited with $?"
+          python -c "import json; t=open('smoke-3.out', encoding='utf-8').read(); assert json.loads(t)['ok'] and '冒烟' in t, t" 2> smoke-3.py || fail "search did not find the Chinese idea ($(head -c 300 smoke-3.py))"
+          # and through a pipe, the way most agents read it
+          "$exe" --cli status | python -c "import sys, json; assert json.load(sys.stdin)['ok']" || fail "piped output"
+          echo "command line ok"
 
       - name: Collect artifacts
         run: |
