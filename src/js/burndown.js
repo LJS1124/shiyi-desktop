@@ -1,4 +1,4 @@
-/* 拾遗 burndown: remaining work vs ideal line, scope line, velocity projection, daily completions */
+/* 十一遗 burndown: remaining work vs ideal line, scope line, velocity projection, daily completions */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

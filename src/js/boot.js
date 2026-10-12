@@ -1,4 +1,4 @@
-/* 拾遗 boot: load data, seed marked examples on first run, wire app events */
+/* 十一遗 boot: load data, seed marked examples on first run, wire app events */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

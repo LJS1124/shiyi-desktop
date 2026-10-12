@@ -1,4 +1,4 @@
-/* 拾遗 PERT network: CPM forward/backward pass, three-point estimates, on-time probability, drag-to-link */
+/* 十一遗 PERT network: CPM forward/backward pass, three-point estimates, on-time probability, drag-to-link */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

@@ -1,4 +1,4 @@
-//! 拾遗 desktop backend: local JSON storage with daily backups, settings,
+//! 十一遗 desktop backend: local JSON storage with daily backups, settings,
 //! AI proxy (Anthropic Messages or OpenAI-compatible), import/export dialogs,
 //! and a global quick-capture shortcut.
 
@@ -361,7 +361,7 @@ pub fn run() {
             reveal_data_dir
         ])
         .build(tauri::generate_context!())
-        .expect("error while building 拾遗");
+        .expect("error while building 十一遗");
 
     app.run(|app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = &event {

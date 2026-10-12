@@ -1,4 +1,4 @@
-/* 拾遗 core: utilities, state, storage, render loop, inspector, modal, settings */
+/* 十一遗 core: utilities, state, storage, render loop, inspector, modal, settings */
 (() => {
 'use strict';
 const SY = window.SY = { views: {}, mods: {}, acts: {}, changeHandlers: [] };
@@ -546,7 +546,7 @@ async function openSettings() {
       </div>
     </div>
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">⌥⇧Space</b> 在任何应用里唤出拾遗并聚焦记录框 · <b class="mono">⌘K</b> 聚焦记录框 · <b class="mono">⌘1–⌘8</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">⌥⇧Space</b> 在任何应用里唤出十一遗并聚焦记录框 · <b class="mono">⌘K</b> 聚焦记录框 · <b class="mono">⌘1–⌘8</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear' });
 }
@@ -602,7 +602,7 @@ SY.parseJSON = text => {
 async function doExport() {
   const data = { app: 'shiyi', version: 2, exportedAt: new Date().toISOString() };
   COLS.forEach(c => { data[c] = list(c); });
-  const fileName = `拾遗备份-${TODAY()}.json`;
+  const fileName = `十一遗备份-${TODAY()}.json`;
   if (invoke) {
     try { const ok = await invoke('export_data', { data, fileName }); if (ok) toast('备份已导出'); } catch (e) { toast('导出失败：' + e); }
     return;
@@ -617,7 +617,7 @@ async function doExport() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 function importObj(obj) {
-  if (!obj || typeof obj !== 'object') { toast('这个文件不是拾遗的备份。'); return; }
+  if (!obj || typeof obj !== 'object') { toast('这个文件不是十一遗的备份。'); return; }
   let n = 0;
   for (const c of COLS) for (const d of (Array.isArray(obj[c]) ? obj[c] : [])) {
     if (!d || typeof d !== 'object' || !d.id) continue;

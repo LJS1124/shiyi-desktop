@@ -1,4 +1,4 @@
-/* 拾遗 main views: today, ideas, projects, project detail */
+/* 十一遗 main views: today, ideas, projects, project detail */
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;

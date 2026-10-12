@@ -25,7 +25,7 @@ body = re.sub(r'src="(assets/[^"]+\.png)"', inline_img, body)
 css = "\n".join((SRC / s).read_text(encoding="utf-8") for s in styles)
 js = "\n".join((SRC / s).read_text(encoding="utf-8").replace("</script", "<\\/script") for s in scripts)
 
-page = f"""<title>拾遗桌面版</title>
+page = f"""<title>十一遗</title>
 <style>
 {css}
 </style>
