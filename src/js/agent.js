@@ -5,7 +5,7 @@
 const SY = window.SY, S = SY.S;
 const { esc, icon, $, pad } = SY;
 const invoke = SY.invoke;
-const V = S.view.log = S.view.log || { rev: -1, items: null, loading: false, filter: 'all', open: {} };
+const V = S.view.log = S.view.log || { rev: -1, items: null, loading: false, filter: 'all', open: {}, type: 'all', kind: 'all', q: '', groupsOpen: {} };
 const PERM = [['read', '只读', 'AI 只能查看，不能做任何修改。'], ['write', '可写', 'AI 可以记灵感、建项目和任务、改状态、建关联、撤销自己的操作；只能删除 AI 自己建的内容。推荐。'], ['full', '完全', 'AI 也可以删除你建的内容、撤销你的操作。删除都是软删除，仍能在这里恢复。']];
 
 const whoOf = actor => (!actor || actor === 'user' ? null : String(actor).replace(/^agent:/, ''));
@@ -23,7 +23,7 @@ async function fetchLog() {
   try { await SY.store.flush(); } catch (e) {}
   const rev = S.rev;
   try {
-    V.items = await SY.store.getLog({ actor: V.filter === 'all' ? null : V.filter, limit: 120 });
+    V.items = await SY.store.getLog({ actor: V.filter === 'all' ? null : V.filter, limit: 300 });
     V.err = null;
   } catch (e) { V.err = SY.errText(e); V.items = V.items || []; }
   V.rev = rev; V.loading = false;
@@ -48,6 +48,64 @@ function batchHtml(b) {
   </div>`;
 }
 
+const TYPE_CN = { idea: '灵感', project: '项目', task: '任务', map: '导图', link: '关联', setting: '设置' };
+const KIND = op => { const v = String(op || '').split('.').pop(); return v === 'restore' ? 'create' : v === 'set' ? 'update' : v; };
+const isUndoBatch = b => !!b.undo_of || (b.ops.length && b.ops.every(o => /\.undo$/.test(o.op)));
+function matches(b) {
+  const q = V.q.trim().toLowerCase();
+  if (q && !((b.note || '') + ' ' + b.ops.map(o => o.summary || '').join(' ')).toLowerCase().includes(q)) return false;
+  return b.ops.some(o => (V.type === 'all' || o.entity_type === V.type) && (V.kind === 'all' || KIND(o.op) === V.kind));
+}
+/* consecutive small edits of one item by the same person within 10 minutes become one group */
+function groupBatches(list) {
+  const out = [];
+  const single = b => { const ids = new Set(b.ops.map(o => o.entity_id)); return ids.size === 1 && !isUndoBatch(b) && !b.note ? b.ops[0].entity_id : null; };
+  for (const b of list) {
+    const e = single(b), g = out[out.length - 1];
+    if (e && g && g.entity === e && g.actor === b.actor && tsMs(g.batches[g.batches.length - 1].ts) - tsMs(b.ts) <= 600000) { g.batches.push(b); continue; }
+    out.push({ entity: e, actor: b.actor, type: e ? b.ops[0].entity_type : null, batches: [b] });
+  }
+  return out;
+}
+function groupHtml(g) {
+  if (g.batches.length === 1) return batchHtml(g.batches[0]);
+  const bs = g.batches, who = whoOf(g.actor), first = tsMs(bs[bs.length - 1].ts), last = tsMs(bs[0].ts);
+  const live = bs.filter(b => !b.undone), key = bs[0].batch, open = V.groupsOpen[key];
+  const name = SY.titleOfId(g.entity);
+  const title = name && name !== g.entity ? name : ((bs[0].ops[0].summary || '').match(/「(.+?)」/) || [, g.entity])[1];
+  return `<div class="opb opg ${who ? 'is-ai' : ''} ${live.length ? '' : 'is-undone'}">
+    <div class="opb-h">
+      <span class="who">${who ? `${icon('spark', 13)}${esc(who)}` : '我'}</span>
+      <span class="mono te">${hm(first)}${hm(first) !== hm(last) ? '–' + hm(last) : ''}</span>
+      <span class="opg-t">编辑${TYPE_CN[g.type] || ''}「${esc(String(title).slice(0, 30))}」<span class="te"> · ${bs.length} 次修改</span></span>
+      ${live.length ? '' : '<span class="pill">已撤销</span>'}
+      <span class="sp"></span>
+      <button type="button" class="btn btn-sm btn-ghost" data-act="op-group" data-key="${esc(key)}">${open ? '收起' : '展开'}</button>
+      ${live.length ? `<button type="button" class="btn btn-sm btn-ghost" data-act="op-undo-group" data-batches="${esc(live.map(b => b.batch).join(','))}">${icon('undo', 14)}撤销这一组</button>` : ''}
+    </div>
+    ${open ? `<ul class="opg-list">${bs.map(b => `<li class="${b.undone ? 'is-undone' : ''}"><span class="mono te">${hm(tsMs(b.ts))}</span><span class="opg-s">${esc(b.ops.map(o => { const x = String(o.summary || o.op); return x.includes('：') ? x.split('：').slice(1).join('：') : x; }).join('；'))}</span>${b.undone ? '<span class="pill">已撤销</span>' : `<button type="button" class="mini" data-act="op-undo" data-batch="${esc(b.batch)}">${icon('undo', 12)}撤销</button>`}</li>`).join('')}</ul>`
+      : `<div class="opg-sum te">${esc(summaryLine(bs))}</div>`}
+  </div>`;
+}
+function summaryLine(bs) {
+  // chronological parts; "added an unnamed node" + "named it X" reads as "added X"
+  const parts = [];
+  bs.slice().reverse().forEach(b => b.ops.forEach(o => { const m = String(o.summary || '').split('：').slice(1).join('：'); if (m) parts.push(...m.split('、')); }));
+  const out = [];
+  for (const p of parts) {
+    const named = p.match(/^「未命名」改为「(.+)」$/);
+    const i = named ? out.lastIndexOf('添加节点「未命名」') : -1;
+    if (i >= 0) out[i] = `添加节点「${named[1]}」`; else out.push(p);
+  }
+  // 添加节点「A」、添加节点「B」 → 添加节点「A」「B」
+  const merged = [];
+  for (const p of out) {
+    const m = p.match(/^(添加节点|删除节点|移动节点)(「.+」)$/), prev = merged[merged.length - 1];
+    if (m && prev && prev.startsWith(m[1] + '「')) merged[merged.length - 1] = prev + m[2];
+    else if (!merged.includes(p)) merged.push(p);
+  }
+  return merged.slice(0, 6).join('、') + (merged.length > 6 ? ` 等 ${merged.length} 处` : '');
+}
 SY.views.log = {
   render() {
     if (S.unseenAgent) { S.unseenAgent = 0; setTimeout(() => SY.renderAll(), 0); }
@@ -59,12 +117,13 @@ SY.views.log = {
     else if (!items.length) body = `<div class="empty-big clay"><h3>${V.filter === 'agents' ? 'AI 还没有动过你的数据' : '还没有记录'}</h3><p>${V.filter === 'agents' ? '在「设置 → AI 接入」里装好命令行工具和技能，让 Claude Code 之类的 AI 助手帮你记灵感、拆任务、找关联。它做的每一处修改都会出现在这里。' : '之后的每一次修改都会记在这里，可以随时撤销。'}</p>${V.filter === 'agents' ? `<button class="btn btn-primary" type="button" data-act="settings">${icon('gear', 15)}设置 AI 接入</button>` : ''}</div>`;
     else {
       let last = '', out = '';
-      for (const b of items) {
-        const day = dayLabel(tsMs(b.ts));
+      const shown = items.filter(matches);
+      for (const g of groupBatches(shown)) {
+        const day = dayLabel(tsMs(g.batches[0].ts));
         if (day !== last) { out += `<div class="op-day">${day}</div>`; last = day; }
-        out += batchHtml(b);
+        out += groupHtml(g);
       }
-      body = `<div class="oplog">${out}</div>`;
+      body = shown.length ? `<div class="oplog">${out}</div>` : '<div class="empty">没有符合筛选条件的记录。</div>';
     }
     return `<div class="vh"><div><h1>操作记录</h1><div class="sub">每一次修改都记在这里——你在界面里做的，和 AI 通过命令行做的。任何一批都能撤销，撤销本身也能再撤销。</div></div>
         <div class="vh-acts"><div class="seg">${[['all', '全部'], ['agents', 'AI'], ['user', '我']].map(([k, l]) => `<button type="button" class="${V.filter === k ? 'is-on' : ''}" data-act="op-filter" data-v="${k}">${l}</button>`).join('')}</div></div></div>
@@ -73,6 +132,12 @@ SY.views.log = {
         <div><b>AI 权限：${perm[1]}</b><div class="te">${perm[2]}</div></div>
         <span class="sp"></span>
         <button type="button" class="btn btn-sm" data-act="settings">${icon('term', 14)}AI 接入设置</button>
+      </div>
+      <div class="toolbar">
+        <div class="seg seg-sm">${[['all', '全部类型'], ['idea', '灵感'], ['project', '项目'], ['task', '任务'], ['map', '导图'], ['link', '关联']].map(([k, l]) => `<button type="button" class="${V.type === k ? 'is-on' : ''}" data-act="op-type" data-v="${k}">${l}</button>`).join('')}</div>
+        <div class="seg seg-sm">${[['all', '全部操作'], ['create', '新建'], ['update', '修改'], ['delete', '删除'], ['undo', '撤销']].map(([k, l]) => `<button type="button" class="${V.kind === k ? 'is-on' : ''}" data-act="op-kind" data-v="${k}">${l}</button>`).join('')}</div>
+        <span class="sp"></span>
+        <input class="ctl" id="op-q" data-keep="op-q" placeholder="搜索记录…" value="${esc(V.q)}" style="width:180px">
       </div>
       ${V.err ? `<div class="warn">读取记录失败：${esc(V.err)}</div>` : ''}
       ${body}`;
@@ -120,9 +185,20 @@ async function copy(text) {
     let ok = false; try { ok = document.execCommand('copy'); } catch (_) {} ta.remove(); return ok;
   }
 }
+document.addEventListener('input', e => { if (e.target.id === 'op-q') { V.q = e.target.value; if (!e.isComposing) SY.scheduleRender(); } });
+document.addEventListener('compositionend', e => { if (e.target.id === 'op-q') { V.q = e.target.value; SY.scheduleRender(); } });
 Object.assign(SY.acts, {
   'op-filter': el => { V.filter = el.dataset.v; V.items = null; V.rev = -1; SY.renderAll(); },
   'op-more': el => { V.open[el.dataset.batch] = true; SY.renderAll(); },
+  'op-type': el => { V.type = el.dataset.v; SY.renderAll(); },
+  'op-kind': el => { V.kind = el.dataset.v; SY.renderAll(); },
+  'op-group': el => { V.groupsOpen[el.dataset.key] = !V.groupsOpen[el.dataset.key]; SY.renderAll(); },
+  'op-undo-group': async el => {
+    el.disabled = true; let n = 0;
+    try { for (const b of el.dataset.batches.split(',')) { const r = await SY.store.undo(b); if (!r) break; n++; } SY.toast(n ? `已撤销这一组的 ${n} 次修改` : '没有撤销'); }
+    catch (e) { SY.toast('撤销失败：' + SY.errText(e)); }
+    V.rev = -1; SY.renderAll();
+  },
   'op-undo': async el => {
     el.disabled = true;
     try { const r = await SY.store.undo(el.dataset.batch); if (r) SY.toast('已撤销，需要的话可以在这里再撤销回来'); }

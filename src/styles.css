@@ -686,3 +686,12 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .maybe-h .te{font-weight:500;font-size:11px;color:var(--ink-3)}
 .rel.is-maybe .rel-t{color:var(--ink-2);font-weight:500}
 .maybe-why{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-3)}
+
+/* operation log groups */
+.opg-t{font-weight:600;font-size:13px}
+.opg-sum{margin:4px 0 0 2px;line-height:1.6}
+.opg-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.opg-list li{display:flex;align-items:center;gap:10px;font-size:13px;padding:3px 4px;border-radius:8px}
+.opg-list li:hover{background:var(--clay-2)}
+.opg-list li.is-undone .opg-s{text-decoration:line-through;color:var(--ink-3)}
+.opg-s{flex:1;min-width:0;color:var(--ink-2)}

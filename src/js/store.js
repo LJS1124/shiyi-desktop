@@ -71,6 +71,24 @@ function titleOfId(id) {
 SY.titleOf = titleOf; SY.titleOfId = titleOfId;
 const FIELD_CN = { status: '状态', due: '截止', start: '开始', todayDate: '今日计划', priority: '优先级', title: '标题', text: '内容', name: '名称', note: '备注', tags: '标签', deps: '前置任务', projectId: '项目', estO: '估时', estM: '估时', estP: '估时', star: '星标', goal: '目标', area: '领域', color: '颜色', nodes: '节点', rank: '排序', relation: '关系' };
 const ST_CN = { ...SY.TASK_ST, ...SY.IDEA_ST, active: '进行中', paused: '暂停', confirmed: '已确认', suggested: '待确认' };
+/* what changed inside a mind map (same wording as the core's describe_node_changes) */
+function nodeChanges(b, a) {
+  b = (b && typeof b === 'object') ? b : {}; a = (a && typeof a === 'object') ? a : {};
+  const t = n => { const x = String((n && n.text) || '').trim(); return x ? clip(x, 16) : '未命名'; };
+  const ids = o => Object.keys(o).sort();
+  const added = ids(a).filter(k => !(k in b)), removed = ids(b).filter(k => !(k in a)), both = ids(a).filter(k => k in b);
+  const renamed = both.filter(k => (b[k].text || '') !== (a[k].text || '')), moved = both.filter(k => (b[k].parent ?? null) !== (a[k].parent ?? null));
+  const parts = [];
+  if (added.length) parts.push(added.length === 1 ? `添加节点「${t(a[added[0]])}」` : `添加 ${added.length} 个节点`);
+  if (removed.length) parts.push(removed.length === 1 ? `删除节点「${t(b[removed[0]])}」` : `删除 ${removed.length} 个节点`);
+  if (renamed.length) parts.push(renamed.length === 1 ? `「${t(b[renamed[0]])}」改为「${t(a[renamed[0]])}」` : `改了 ${renamed.length} 个节点的文字`);
+  if (moved.length) parts.push(moved.length === 1 ? `移动节点「${t(a[moved[0]])}」` : `移动 ${moved.length} 个节点`);
+  if (parts.length) return parts.join('、');
+  const diff = both.filter(k => JSON.stringify(b[k]) !== JSON.stringify(a[k]));
+  if (diff.some(k => JSON.stringify({ ...b[k], collapsed: null }) === JSON.stringify({ ...a[k], collapsed: null }))) return '折叠或展开节点';
+  if (diff.some(k => JSON.stringify(b[k].link ?? null) !== JSON.stringify(a[k].link ?? null))) return '关联到任务或灵感';
+  return '调整节点';
+}
 function summarize(verb, col, before, after) {
   const d = after || before, t = titleOf(col, d), cn = CN[col];
   if (col === 'links') {
@@ -85,7 +103,7 @@ function summarize(verb, col, before, after) {
     const l = FIELD_CN[k]; if (!l) continue;
     const x = before[k] ?? null, y = after[k] ?? null; if (JSON.stringify(x) === JSON.stringify(y)) continue;
     const sh = v => (v == null || v === '' ? '无' : ST_CN[v] || clip(String(v), 16));
-    const p = ['status', 'due', 'start', 'todayDate', 'priority', 'area'].includes(k) ? `${l} ${sh(x)}→${sh(y)}` : l;
+    const p = k === 'nodes' ? nodeChanges(x, y) : ['status', 'due', 'start', 'todayDate', 'priority', 'area'].includes(k) ? `${l} ${sh(x)}→${sh(y)}` : l;
     if (!parts.includes(p)) parts.push(p);
   }
   return `修改${cn}「${t}」` + (parts.length ? '：' + parts.join('、') : '');

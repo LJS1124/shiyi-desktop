@@ -404,6 +404,7 @@ impl<'a> Ctx<'a> {
                     };
                     let part = match f.name {
                         "status" | "due_date" | "start_date" | "today_date" | "priority" | "area" => format!("{} {}→{}", f.cn, show(x), show(y)),
+                        "nodes" => describe_node_changes(x, y),
                         _ => f.cn.to_string(),
                     };
                     parts.push(part);
@@ -1290,6 +1291,79 @@ pub(crate) fn duration_days(t: &Map<String, Value>) -> i64 {
 fn node(text: &str, parent: Option<&str>) -> (String, Value) {
     let id = format!("n{}", short_id());
     (id.clone(), json!({ "id": id, "text": text, "parent": parent, "children": [], "collapsed": false, "color": null, "link": null }))
+}
+
+/// Describes how a mind map's `nodes` changed, for the operation log (e.g. `添加节点「预算」`).
+fn describe_node_changes(before: &Value, after: &Value) -> String {
+    const FIELDS: [&str; 7] = ["id", "text", "parent", "children", "collapsed", "color", "link"];
+    let empty = Map::new();
+    let b = before.as_object().unwrap_or(&empty);
+    let a = after.as_object().unwrap_or(&empty);
+    let text = |n: &Value| n.get("text").and_then(Value::as_str).unwrap_or("").to_string();
+    let label = |n: &Value| {
+        let t = clip(&text(n), 16);
+        if t.is_empty() {
+            "未命名".to_string()
+        } else {
+            t
+        }
+    };
+    let mut ids: Vec<&String> = b.keys().chain(a.keys()).collect();
+    ids.sort();
+    ids.dedup();
+    let (mut added, mut removed, mut renamed, mut moved) = (vec![], vec![], vec![], vec![]);
+    // per node: which of FIELDS differ (only consulted when no text or parent change exists)
+    let mut shapes: Vec<Vec<&str>> = vec![];
+    for id in ids {
+        match (b.get(id), a.get(id)) {
+            (None, Some(n)) => added.push(label(n)),
+            (Some(n), None) => removed.push(label(n)),
+            (Some(x), Some(y)) => {
+                if text(x) != text(y) {
+                    renamed.push((label(x), label(y)));
+                }
+                if x.get("parent").unwrap_or(&Value::Null) != y.get("parent").unwrap_or(&Value::Null) {
+                    moved.push(label(y));
+                }
+                let diff: Vec<&str> = FIELDS.iter().copied().filter(|k| x.get(*k).unwrap_or(&Value::Null) != y.get(*k).unwrap_or(&Value::Null)).collect();
+                if !diff.is_empty() {
+                    shapes.push(diff);
+                }
+            }
+            (None, None) => {}
+        }
+    }
+    let mut parts: Vec<String> = vec![];
+    match added.len() {
+        0 => {}
+        1 => parts.push(format!("添加节点「{}」", added[0])),
+        n => parts.push(format!("添加 {} 个节点", n)),
+    }
+    match removed.len() {
+        0 => {}
+        1 => parts.push(format!("删除节点「{}」", removed[0])),
+        n => parts.push(format!("删除 {} 个节点", n)),
+    }
+    match renamed.as_slice() {
+        [] => {}
+        [(from, to)] => parts.push(format!("「{}」改为「{}」", from, to)),
+        r => parts.push(format!("改了 {} 个节点的文字", r.len())),
+    }
+    match moved.len() {
+        0 => {}
+        1 => parts.push(format!("移动节点「{}」", moved[0])),
+        n => parts.push(format!("移动 {} 个节点", n)),
+    }
+    if !parts.is_empty() {
+        return parts.join("、");
+    }
+    if shapes.iter().any(|d| matches!(d.as_slice(), ["collapsed"])) {
+        "折叠或展开节点".to_string()
+    } else if shapes.iter().any(|d| d.contains(&"link")) {
+        "关联到任务或灵感".to_string()
+    } else {
+        "调整节点".to_string()
+    }
 }
 
 /// Builds mind map nodes from an indented outline (text or nested JSON).
