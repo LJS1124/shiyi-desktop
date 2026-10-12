@@ -193,6 +193,8 @@ pub fn main_with_args(args: Vec<String>) -> i32 {
         return 0;
     }
     let actor = a.str("as").or_else(|| a.str("agent")).or_else(|| std::env::var("SHIYI_AGENT").ok()).unwrap_or_else(|| "cli".into());
+    // the command line always acts as an agent; only the app itself writes as "user"
+    let actor = crate::ops::actor_name(&format!("agent:{}", actor.trim().trim_start_matches("agent:")));
     let sess = Session { db: a.str("db"), actor, dry_run: a.has("dry-run") };
     let res = run(&sess, &a);
     let (out, code) = match res {

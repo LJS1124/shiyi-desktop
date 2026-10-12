@@ -83,6 +83,11 @@ const IC = {
   today: '<path d="M8 2v12"/><circle cx="8" cy="8" r="2.4"/>',
   link: '<path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/>',
   gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/>',
+  graph: '<circle cx="3.6" cy="4.2" r="1.7"/><circle cx="12.2" cy="3.6" r="1.5"/><circle cx="8.6" cy="12" r="2"/><circle cx="13" cy="10.4" r="1.1"/><path d="M5.2 4.9l5.5-1M4.6 5.6l3 4.7M10 3.6L9 10M10.5 11.5l1.6-.7"/>',
+  clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.4 1.6"/>',
+  shield: '<path d="M8 1.8l5 1.9v4.1c0 3-2.1 5.3-5 6.4-2.9-1.1-5-3.4-5-6.4V3.7z"/><path d="M5.8 8.1l1.6 1.6 2.9-3.1"/>',
+  term: '<rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6"/><path d="M4.4 6.2l2.2 1.8-2.2 1.8M8.4 10.2h3.2"/>',
+  copy: '<rect x="5.2" y="5.2" width="8.4" height="8.4" rx="1.4"/><path d="M10.8 5.2V3.6c0-.6-.4-1.1-1-1.1H3.6c-.6 0-1.1.5-1.1 1.1v6.2c0 .6.5 1 1.1 1h1.6"/>',
   wand: '<path d="M3 13l7.5-7.5M9.2 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5zM12.8 7l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4z"/>'
 };
 const icon = (n, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -90,7 +95,7 @@ const icon = (n, size = 16) => `<svg width="${size}" height="${size}" viewBox="0
 Object.assign(SY, { $, $$, esc, uid, pad, ymd, parseYmd, addDays, dayDiff, TODAY, tsDay, now, WD, clamp, num, isYmd, lsGet, lsSet, isoWeek, weekStartTs, ageDays, ago, dueLabel, md, fmtTs, icon });
 
 /* ================= constants & state ================= */
-const COLS = ['ideas', 'projects', 'tasks', 'maps'];
+const COLS = ['ideas', 'projects', 'tasks', 'maps', 'links'];
 const IDEA_ST = { inbox: '收件箱', incubating: '孵化中', converted: '已转化', archived: '归档' };
 const TASK_ST = { todo: '待办', doing: '进行中', done: '已完成' };
 const PROJ_ST = { active: '进行中', paused: '暂停', done: '已完成' };
@@ -100,7 +105,8 @@ const LS_UI = 'shiyi.desk.ui.v1', LS_DATA = 'shiyi.desk.data.v1';
 Object.assign(SY, { COLS, IDEA_ST, TASK_ST, PROJ_ST, AREA, PALETTE });
 
 const S = SY.S = {
-  data: { ideas: new Map(), projects: new Map(), tasks: new Map(), maps: new Map() },
+  data: { ideas: new Map(), projects: new Map(), tasks: new Map(), maps: new Map(), links: new Map() },
+  rev: 0, seq: 0, permission: 'write', unseenAgent: 0,
   ready: false, saveErr: null, editing: false, dragging: false,
   ui: Object.assign({
     view: 'today', projectId: null, ptab: 'board', scope: 'all', ideaFilter: 'inbox', tag: '', q: '',
@@ -119,39 +125,20 @@ const invoke = T && T.core && typeof T.core.invoke === 'function' ? T.core.invok
 SY.invoke = invoke;
 SY.isApp = !!invoke;
 
-/* ================= storage ================= */
-async function loadAll() {
-  let d = {};
-  try { d = invoke ? (await invoke('load_data')) || {} : (lsGet(LS_DATA) || {}); }
-  catch (e) { S.saveErr = String(e); toast('读取数据失败：' + e); }
-  for (const c of COLS) {
-    const m = new Map();
-    (Array.isArray(d[c]) ? d[c] : []).forEach(x => { if (x && x.id) m.set(String(x.id), { ...x, id: String(x.id) }); });
-    S.data[c] = m;
-  }
-  S.ready = true;
-}
-let saveTimer = 0, saving = false, dirty = false;
-function scheduleSave() { dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(flush, 180); }
-async function flush() {
-  if (saving) { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 150); return; }
-  if (!dirty) return;
-  dirty = false; saving = true;
-  const payload = { app: 'shiyi', version: 2, savedAt: new Date().toISOString() };
-  COLS.forEach(c => { payload[c] = list(c); });
-  try {
-    if (invoke) await invoke('save_data', { data: payload }); else lsSet(LS_DATA, payload);
-    S.saveErr = null;
-  } catch (e) { S.saveErr = String(e); dirty = true; toast('保存失败：' + e); }
-  saving = false; renderStatus();
-}
-window.addEventListener('beforeunload', () => { if (dirty) flush(); });
+/* ================= storage =================
+   All writes go through put / patch / remove, which record the change for
+   SY.store (js/store.js): in the app it becomes an operation on the shared
+   SQLite database (the same one AI agents reach through the `shiyi` CLI),
+   in the web preview it is kept in this browser with a local operation log. */
+const loadAll = () => SY.store.load();
+const flush = () => SY.store.flush();
+window.addEventListener('beforeunload', () => { SY.store.flush(); });
 const list = col => [...S.data[col].values()];
 function clean(o) { const r = {}; for (const k in o) r[k] = o[k] === undefined ? null : o[k]; return r; }
-function put(col, doc) { doc = clean({ ...doc, updatedAt: now() }); S.data[col].set(doc.id, doc); changed(); return doc; }
-function patch(col, id, part) { const o = S.data[col].get(id); if (!o) return null; const n = clean({ ...o, ...part, updatedAt: now() }); S.data[col].set(id, n); changed(); return n; }
-function remove(col, id) { S.data[col].delete(id); changed(); }
-function changed() { scheduleSave(); scheduleRender(); }
+function put(col, doc) { const before = S.data[col].get(doc.id) || null; doc = clean({ ...doc, updatedAt: now() }); S.data[col].set(doc.id, doc); SY.store.record(col, before, doc, null); changed(); return doc; }
+function patch(col, id, part) { const o = S.data[col].get(id); if (!o) return null; const n = clean({ ...o, ...part, updatedAt: now() }); S.data[col].set(id, n); SY.store.record(col, o, n, Object.keys(part)); changed(); return n; }
+function remove(col, id) { const o = S.data[col].get(id); if (!o) return; S.data[col].delete(id); SY.store.record(col, o, null, null); changed(); }
+function changed() { S.rev++; SY.store.schedule(); scheduleRender(); }
 Object.assign(SY, { list, put, patch, remove, flush, loadAll, changed });
 
 /* ================= domain helpers ================= */
@@ -248,7 +235,8 @@ SY.renderAll = renderAll;
 
 const NAV = [
   ['工作区', [['today', 'sun', '今日', 'butter'], ['ideas', 'bulb', '灵感', 'peach'], ['projects', 'folder', '项目', 'lav']]],
-  ['视图', [['kanban', 'cols', '看板', 'sky'], ['gantt', 'gantt', '甘特图', 'mint'], ['burndown', 'burn', '燃尽图', 'rose'], ['pert', 'net', '网络图 / PERT', 'lav'], ['mindmap', 'mind', '思维导图', 'peach']]]
+  ['视图', [['kanban', 'cols', '看板', 'sky'], ['gantt', 'gantt', '甘特图', 'mint'], ['burndown', 'burn', '燃尽图', 'rose'], ['pert', 'net', '网络图 / PERT', 'lav'], ['mindmap', 'mind', '思维导图', 'peach']]],
+  ['知识与 AI', [['graph', 'graph', '知识图谱', 'sky'], ['log', 'clock', '操作记录', 'butter']]]
 ];
 SY.NAV = NAV;
 function navCounts() {
@@ -257,7 +245,8 @@ function navCounts() {
     today: open.filter(t => t.todayDate === today || (t.due && t.due <= today)).length,
     ideas: list('ideas').filter(i => i.status === 'inbox').length,
     projects: list('projects').filter(p => p.status === 'active').length,
-    kanban: open.length, mindmap: S.data.maps.size
+    kanban: open.length, mindmap: S.data.maps.size,
+    graph: list('links').filter(l => l.status === 'suggested').length || '', log: S.unseenAgent || ''
   };
 }
 function renderNav() {
@@ -270,7 +259,7 @@ function renderNav() {
 function renderStatus() {
   const el = $('#side-foot'); if (!el) return;
   const cls = S.saveErr ? 'is-err' : SY.isApp ? '' : 'is-local';
-  const txt = S.saveErr ? '保存出错，点设置查看' : SY.isApp ? '已保存到本机' : '网页预览 · 数据存在这个浏览器里';
+  const txt = S.saveErr ? '保存出错：' + S.saveErr : SY.isApp ? '已保存到本机 · AI 可通过命令行访问' : '网页预览 · 数据存在这个浏览器里';
   el.innerHTML = `<span class="status ${cls}"><i></i>${txt}</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn btn-sm btn-ghost" type="button" data-act="export">${icon('down', 14)}导出</button>
@@ -362,7 +351,7 @@ SY.chartView = (key, title, sub, opts = {}) => ({
 
 /* ================= mutations ================= */
 function newTask(fields) {
-  const t = { id: uid(), title: '', projectId: null, status: 'todo', priority: 0, start: null, due: null, todayDate: null, note: '', estO: null, estM: null, estP: null, deps: [], createdAt: now(), doneAt: null, ...fields };
+  const t = { id: SY.newId('tasks'), title: '', projectId: null, status: 'todo', priority: 0, start: null, due: null, todayDate: null, note: '', estO: null, estM: null, estP: null, deps: [], createdAt: now(), doneAt: null, ...fields };
   return put('tasks', t);
 }
 function setStatus(id, status) {
@@ -370,7 +359,7 @@ function setStatus(id, status) {
   patch('tasks', id, { status, doneAt: status === 'done' ? now() : null });
 }
 function newProject(fields = {}) {
-  const p = put('projects', { id: uid(), name: '新项目', area: 'work', color: null, status: 'active', goal: '', note: '', start: TODAY(), due: null, createdAt: now(), ...fields });
+  const p = put('projects', { id: SY.newId('projects'), name: '新项目', area: 'work', color: null, status: 'active', goal: '', note: '', start: TODAY(), due: null, createdAt: now(), ...fields });
   return p;
 }
 function del(col, id) {
@@ -381,7 +370,7 @@ function del(col, id) {
   remove(col, id);
   if (S.sel && S.sel.id === id) S.sel = null;
   if (col === 'projects' && S.ui.view === 'project' && S.ui.projectId === id) setView('projects');
-  const name = { tasks: '任务', ideas: '灵感', projects: '项目', maps: '导图' }[col];
+  const name = { tasks: '任务', ideas: '灵感', projects: '项目', maps: '导图', links: '关联' }[col];
   toast(`已删除${name}${extra.length ? '及 ' + extra.length + ' 个任务' : ''}`, { undo: () => { put(col, doc); extra.forEach(t => put('tasks', t)); depFix.forEach(([tid, deps]) => patch('tasks', tid, { deps })); } });
 }
 function setView(v) { S.ui.view = v; if (v !== 'project') S.ui.projectId = null; saveUI(); renderAll(); $('#view-wrap').scrollTop = 0; }
@@ -401,7 +390,7 @@ function renderInspector() {
   }
   const forKey = sel.col + ':' + sel.id;
   if (box.contains(document.activeElement) && box.dataset.for === forKey && document.activeElement.matches('input,textarea,select')) return;
-  const key = forKey + ':' + (item.updatedAt || 0) + ':' + S.data.projects.size + ':' + S.data.tasks.size;
+  const key = forKey + ':' + (item.updatedAt || 0) + ':' + S.rev;
   box.hidden = false; document.body.classList.add('insp-open'); $('#scrim').hidden = false;
   if (box.dataset.key === key) return;
   box.dataset.key = key; box.dataset.for = forKey;
@@ -429,7 +418,8 @@ function renderInspector() {
         <div class="deps">${(t.deps || []).map(d => { const x = S.data.tasks.get(d); return x ? `<span class="dep"><span>${esc(x.title)}</span><button type="button" data-act="rm-dep" data-id="${esc(d)}" aria-label="移除">${icon('x', 11)}</button></span>` : ''; }).join('') || '<span class="te">无</span>'}</div>
         ${cands.length ? `<select class="in" id="i-adddep" aria-label="添加前置任务"><option value="">＋ 添加前置任务…</option>${cands.sort(taskSort).map(x => `<option value="${esc(x.id)}">${esc(x.title)}</option>`).join('')}</select>` : ''}</div>
       <div class="field col1"><label class="lbl" for="i-note">备注</label><textarea class="in" id="i-note" data-f="note" rows="5" placeholder="链接、细节、卡在哪里…">${esc(t.note || '')}</textarea></div>
-      <div class="insp-meta">创建 ${esc(fmtTs(t.createdAt))}${t.doneAt ? '<br>完成 ' + esc(fmtTs(t.doneAt)) : ''}<br>修改 ${esc(fmtTs(t.updatedAt))}</div>
+      ${SY.relSection ? SY.relSection('tasks', t.id) : ''}
+      <div class="insp-meta">创建 ${esc(fmtTs(t.createdAt))}${t.doneAt ? '<br>完成 ' + esc(fmtTs(t.doneAt)) : ''}<br>修改 ${esc(fmtTs(t.updatedAt))}${byLine(t)}</div>
       <div class="insp-acts"><button type="button" class="btn btn-sm btn-danger" data-act="del" data-col="tasks" data-id="${esc(t.id)}">${icon('trash', 14)}删除任务</button></div>
     </div>`;
   } else if (sel.col === 'ideas') {
@@ -447,7 +437,8 @@ function renderInspector() {
         <button type="button" class="btn btn-sm" data-act="idea-to-task" data-id="${esc(i.id)}">${icon('task', 14)}转任务</button>
         <button type="button" class="btn btn-sm" data-act="idea-to-project" data-id="${esc(i.id)}">${icon('folder', 14)}转项目</button>
       </div>
-      <div class="insp-meta">记下于 ${esc(fmtTs(i.createdAt))}（${esc(ago(i.createdAt))}）<br>修改 ${esc(fmtTs(i.updatedAt))}</div>
+      ${SY.relSection ? SY.relSection('ideas', i.id) : ''}
+      <div class="insp-meta">记下于 ${esc(fmtTs(i.createdAt))}（${esc(ago(i.createdAt))}）<br>修改 ${esc(fmtTs(i.updatedAt))}${byLine(i)}</div>
       <div class="insp-acts"><button type="button" class="btn btn-sm btn-danger" data-act="del" data-col="ideas" data-id="${esc(i.id)}">${icon('trash', 14)}删除灵感</button></div>
     </div>`;
   } else {
@@ -461,11 +452,17 @@ function renderInspector() {
       <div class="field"><label class="lbl" for="i-pdue">截止</label><input class="in mono" type="date" id="i-pdue" data-f="due" value="${esc(p.due || '')}"></div>
       <div class="field col1"><label class="lbl" for="i-goal">完成标准</label><textarea class="in" id="i-goal" data-f="goal" rows="3" placeholder="做到什么程度算完成？">${esc(p.goal || '')}</textarea></div>
       <div class="field col1"><label class="lbl" for="i-pnote">笔记</label><textarea class="in" id="i-pnote" data-f="note" rows="5" placeholder="背景、资料链接、决策记录…">${esc(p.note || '')}</textarea></div>
-      <div class="insp-meta">${s.total} 个任务 · ${s.done} 已完成 · ${s.doing} 进行中<br>创建 ${esc(fmtTs(p.createdAt))}</div>
+      ${SY.relSection ? SY.relSection('projects', p.id) : ''}
+      <div class="insp-meta">${s.total} 个任务 · ${s.done} 已完成 · ${s.doing} 进行中<br>创建 ${esc(fmtTs(p.createdAt))}${byLine(p)}</div>
       <div class="insp-acts"><button type="button" class="btn btn-sm btn-danger" data-act="del" data-col="projects" data-id="${esc(p.id)}">${icon('trash', 14)}删除项目${s.total ? '及其 ' + s.total + ' 个任务' : ''}</button></div>
     </div>`;
   }
   box.innerHTML = h;
+}
+function byLine(d) {
+  const who = a => (a && a !== 'user' ? esc(String(a).replace(/^agent:/, '')) + '（AI）' : '');
+  const c = who(d.createdBy), u = who(d.updatedBy);
+  return (c ? '<br>由 ' + c + ' 创建' : '') + (u && u !== c ? '<br>' + u + ' 最近修改' : '');
 }
 function commitField(el) {
   if (!S.sel) return;
@@ -494,12 +491,23 @@ function openModal(title, body, foot, { iconName = 'spark', wide = false } = {})
 function closeModal() { if (SY.onModalClose) { const f = SY.onModalClose; SY.onModalClose = null; f(); } $('#modal').hidden = true; }
 let tt;
 function toast(msg, opt = {}) {
-  const el = $('#toast'); SY.undo = opt.undo || null;
-  el.innerHTML = `<span>${esc(msg)}</span>${SY.undo ? '<button type="button" data-act="undo">撤销</button>' : ''}`;
+  const el = $('#toast'); SY.undo = opt.undo || null; SY.toastAction = opt.action || null;
+  el.innerHTML = `<span>${esc(msg)}</span>${SY.toastAction ? `<button type="button" data-act="toast-action">${esc(SY.toastAction.label)}</button>` : ''}${SY.undo ? '<button type="button" data-act="undo">撤销</button>' : ''}`;
   el.classList.add('is-on'); clearTimeout(tt);
-  tt = setTimeout(() => { el.classList.remove('is-on'); SY.undo = null; }, SY.undo ? 5200 : 2800);
+  tt = setTimeout(() => { el.classList.remove('is-on'); SY.undo = null; SY.toastAction = null; }, opt.ms || (SY.undo || SY.toastAction ? 6500 : 2800));
 }
-Object.assign(SY, { openModal, closeModal, toast });
+/* small promise-based confirm built on the modal */
+function ask(title, body, okLabel = '确定', { danger = false } = {}) {
+  return new Promise(res => {
+    let done = false; const fin = v => { if (done) return; done = true; res(v); };
+    openModal(title, `<p style="margin:0;line-height:1.7">${body}</p>`,
+      `<button class="btn" type="button" data-act="ask-no">取消</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" type="button" data-act="ask-yes">${esc(okLabel)}</button>`, { iconName: null });
+    SY.acts['ask-yes'] = () => { fin(true); SY.onModalClose = null; closeModal(); };
+    SY.acts['ask-no'] = () => { closeModal(); };
+    SY.onModalClose = () => fin(false);
+  });
+}
+Object.assign(SY, { openModal, closeModal, toast, ask });
 
 /* ================= settings ================= */
 const SKINS = [['native', 'macOS 原生'], ['mono', '素白高密度'], ['graphite', '暗夜专业'], ['ink', '宣纸水墨'], ['brutal', '新粗野'], ['clay', '黏土']];
@@ -519,6 +527,7 @@ async function openSettings() {
   let st = { apiFormat: 'anthropic', apiBase: '', model: 'claude-sonnet-5-5', quickModel: 'claude-haiku-5-5', hasKey: false, dataPath: '' };
   if (invoke) { try { st = { ...st, ...(await invoke('get_settings')) }; } catch (e) { toast('读取设置失败：' + e); } }
   const th = S.ui.theme;
+  if (SY.loadAiAccess) SY.loadAiAccess();
   openModal('设置', `
     <div class="set-sec"><h3>AI 接口</h3>
       ${invoke ? '' : SY.sampleFn ? '<p><b>网页预览里，AI 通过你的 Claude 账号运行</b>，下面这些设置在预览里不起作用；装到 Mac 上以后才用这里填的接口和 Key。</p>' : '<p>浏览器预览模式下不能调用 AI，安装桌面版后可用。</p>'}
@@ -532,12 +541,13 @@ async function openSettings() {
       <label class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:600">API Key<input class="in mono" id="s-key" type="password" placeholder="${st.hasKey ? '已保存（留空则不修改）' : 'sk-…'}" autocomplete="off"></label>
       <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-sm" type="button" data-act="settings-test" ${invoke || SY.sampleFn ? '' : 'disabled'}>测试连接</button><span id="s-test" class="te"></span></div>
     </div>
+    ${SY.aiAccessSection ? SY.aiAccessSection() : ''}
     <div class="set-sec"><h3>外观</h3>
       <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="seg" id="s-theme">${[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([k, l]) => `<button type="button" class="${th === k ? 'is-on' : ''}" data-act="theme" data-v="${k}">${l}</button>`).join('')}</div>
     </div>
     <div class="set-sec"><h3>数据</h3>
-      <p>所有数据保存在本机，每天自动备份一份，保留最近 14 天。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
+      <p>所有数据保存在本机的一个数据库文件里，每天自动备份一份，保留最近 14 天。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${invoke ? `<button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}在访达中显示</button>` : ''}
@@ -600,35 +610,34 @@ SY.parseJSON = text => {
 
 /* ================= export / import ================= */
 async function doExport() {
-  const data = { app: 'shiyi', version: 2, exportedAt: new Date().toISOString() };
-  COLS.forEach(c => { data[c] = list(c); });
   const fileName = `十一遗备份-${TODAY()}.json`;
   if (invoke) {
-    try { const ok = await invoke('export_data', { data, fileName }); if (ok) toast('备份已导出'); } catch (e) { toast('导出失败：' + e); }
+    await SY.store.flush();
+    try { const ok = await invoke('core_export', { fileName }); if (ok) toast('备份已导出'); } catch (e) { toast('导出失败：' + SY.errText(e)); }
     return;
   }
+  const data = JSON.stringify(SY.store.snapshot(), null, 2);
   if (SY.dl) {
-    try { await SY.dl.save({ filename: fileName, data: JSON.stringify(data, null, 2) }); toast('备份已导出'); }
+    try { await SY.dl.save({ filename: fileName, data }); toast('备份已导出'); }
     catch (e) { if (!e || e.code !== 'declined') toast('导出没有成功，稍后再试。'); }
     return;
   }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const blob = new Blob([data], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 function importObj(obj) {
   if (!obj || typeof obj !== 'object') { toast('这个文件不是十一遗的备份。'); return; }
-  let n = 0;
-  for (const c of COLS) for (const d of (Array.isArray(obj[c]) ? obj[c] : [])) {
-    if (!d || typeof d !== 'object' || !d.id) continue;
-    const doc = { ...d, id: String(d.id) };
-    if (c === 'tasks') { doc.deps = Array.isArray(doc.deps) ? doc.deps.map(String) : []; }
-    S.data[c].set(doc.id, doc); n++;
-  }
-  changed(); toast(n ? `导入完成，共 ${n} 条` : '文件里没有可导入的内容。');
+  const n = SY.withNote('导入备份', () => SY.store.importLocal(obj));
+  toast(n ? `导入完成，共 ${n} 条` : '文件里没有可导入的内容。');
 }
 async function doImport() {
-  if (invoke) { try { const obj = await invoke('import_data'); if (obj) importObj(obj); } catch (e) { toast('导入失败：' + e); } return; }
+  if (invoke) {
+    await SY.store.flush();
+    try { const r = await invoke('core_import'); if (r) { await SY.store.reload(); toast(r.imported ? `导入完成，共 ${r.imported} 条（可在「操作记录」里撤销）` : '文件里没有可导入的内容。'); } }
+    catch (e) { toast('导入失败：' + SY.errText(e)); }
+    return;
+  }
   $('#import-file').click();
 }
 SY.acts['export'] = () => doExport();
@@ -684,6 +693,7 @@ Object.assign(SY.acts, {
   'star': el => { const i = S.data.ideas.get(el.dataset.id); if (i) patch('ideas', i.id, { star: !i.star }); },
   'del': el => del(el.dataset.col, el.dataset.id),
   'undo': () => { if (SY.undo) { const u = SY.undo; SY.undo = null; u(); $('#toast').classList.remove('is-on'); } },
+  'toast-action': () => { if (SY.toastAction) { const a = SY.toastAction; SY.toastAction = null; $('#toast').classList.remove('is-on'); a.fn(); } },
   'close-modal': () => closeModal(),
   'tab': el => { S.ui.ptab = el.dataset.v; saveUI(); renderAll(); }
 });
@@ -697,7 +707,7 @@ $('#capture').addEventListener('submit', e => {
   if (mode === 'idea') {
     const tags = [...text.matchAll(/#([^\s#,，。；;、]+)/g)].map(m => m[1]);
     const body = text.replace(/#[^\s#,，。；;、]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim() || text;
-    put('ideas', { id: uid(), text: body, note: '', tags: [...new Set(tags)], status: 'inbox', star: false, createdAt: now(), projectId: null });
+    put('ideas', { id: SY.newId('ideas'), text: body, note: '', tags: [...new Set(tags)], status: 'inbox', star: false, createdAt: now(), projectId: null });
     toast('灵感已记下');
   } else {
     const due = $('#cap-due').value || null, projectId = $('#cap-project').value || null;
@@ -770,7 +780,7 @@ SY.panZoom = (wrap, layer, state, { onChange } = {}) => {
     apply();
   }, { passive: false });
   wrap.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.pnode,.mnode,.canvas-tools,.pe-hit,button,input,textarea')) return;
+    if (e.button !== 0 || e.target.closest('.pnode,.mnode,.gnode,.gcard,.gsug,.canvas-tools,.pe-hit,.ge-hit,button,input,textarea,select')) return;
     const x0 = state.x, y0 = state.y;
     SY.drag(e, { threshold: 2, onStart: () => wrap.classList.add('is-panning'), onMove: (ev, dx, dy) => { state.x = x0 + dx; state.y = y0 + dy; apply(); }, onEnd: () => wrap.classList.remove('is-panning') });
   });

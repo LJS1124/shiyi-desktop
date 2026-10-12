@@ -24,6 +24,10 @@ body = re.sub(r'src="(assets/[^"]+\.png)"', inline_img, body)
 
 css = "\n".join((SRC / s).read_text(encoding="utf-8") for s in styles)
 js = "\n".join((SRC / s).read_text(encoding="utf-8").replace("</script", "<\\/script") for s in scripts)
+# the agent skill, so the preview can show / copy it (the app reads it from the binary)
+import json
+skill = (ROOT / "skills" / "shiyi" / "SKILL.md").read_text(encoding="utf-8")
+js = "window.__SHIYI_SKILL__ = " + json.dumps(skill, ensure_ascii=False).replace("</", "<\\/") + ";\n" + js
 
 page = f"""<title>十一遗</title>
 <style>

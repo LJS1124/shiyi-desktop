@@ -179,6 +179,7 @@ pub static LINK: TypeDef = TypeDef {
         f("note", Kind::LongText, &["reason", "why", "description"], "说明", "why these are related"),
         f("status", Kind::Enum(LINK_STATUS), &["state"], "状态", "confirmed | suggested (suggestions wait for the user to accept)"),
         f("confidence", Kind::Num, &["score"], "置信度", "0..1, for suggestions"),
+        f("sample", Kind::Bool, &[], "示例", "true for example data created on first run"),
         f("source_type", Kind::Text, &[], "起点类型", "managed"),
         f("target_type", Kind::Text, &[], "终点类型", "managed"),
     ],

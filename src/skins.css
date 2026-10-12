@@ -550,3 +550,9 @@
 [data-skin="brutal"] .me{stroke:var(--ink)!important;opacity:1!important}
 [data-skin="brutal"] .toast{background:var(--butter);color:#0E0E0E}
 [data-skin="brutal"] .toast button{color:#0E0E0E;text-decoration:underline}
+/* knowledge graph / operation log on the native skin */
+[data-skin="native"] .gcard,[data-skin="native"] .gsug,[data-skin="native"] .opb,[data-skin="native"] .agent-banner,[data-skin="native"] .wl-pop{border-radius:10px}
+[data-skin="native"] .opb{box-shadow:var(--sh-out)}
+[data-skin="native"] .opb.is-ai{box-shadow:var(--sh-out),inset 3px 0 0 var(--lav)}
+[data-skin="native"] .gnode text{stroke:var(--bg-2)}
+[data-skin="native"] .wl{border-radius:4px}

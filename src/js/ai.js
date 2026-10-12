@@ -15,7 +15,7 @@ SY.runAI = async cfg => {
     `<button class="btn" type="button" data-act="close-modal">停止</button>`, { wide: cfg.wide });
   const t0 = Date.now(); timer = setInterval(() => { const el = $('#ai-el'); if (el) el.textContent = Math.round((Date.now() - t0) / 1000) + ' 秒'; }, 1000);
   SY.onModalClose = () => { runId++; clearInterval(timer); };
-  SY.aiRetry = () => SY.runAI(cfg); SY.aiApply = null;
+  SY.aiRetry = () => SY.runAI(cfg); SY.aiApply = null; SY.aiTitle = cfg.title.split(' · ')[0].replace(/^AI\s*/, '');
   try {
     const text = await SY.aiCall(cfg.prompt, cfg.quick);
     if (my !== runId) return; clearInterval(timer);
@@ -33,7 +33,7 @@ SY.runAI = async cfg => {
       : `<button class="btn" type="button" data-act="close-modal">关闭</button>${e && e.code !== 'no_backend' ? '<button class="btn btn-primary" type="button" data-act="ai-retry">重试</button>' : ''}`;
   }
 };
-SY.acts['ai-apply'] = () => { if (SY.aiApply) SY.aiApply(); };
+SY.acts['ai-apply'] = () => { if (SY.aiApply) SY.withNote('AI · ' + (SY.aiTitle || '建议'), SY.aiApply); };
 SY.acts['ai-retry'] = () => { if (SY.aiRetry) SY.aiRetry(); };
 
 /* -------- idea → project + tasks -------- */
@@ -231,6 +231,54 @@ SY.acts['ai-mm'] = () => {
       const fd = new FormData($('#ai-form')), picks = fd.getAll('pick').map(Number);
       SY.mmMutate(nodes => { picks.forEach(k => { const t = String(fd.get('t' + k) || '').trim(); if (!t || !nodes[id]) return; const cid = SY.mmAddChild(nodes, id, t); fd.getAll('s' + k).forEach(s => SY.mmAddChild(nodes, cid, String(s))); }); });
       SY.closeModal(); SY.toast(`已添加 ${picks.length} 个分支`);
+    }
+  });
+};
+
+/* -------- knowledge graph: find links between ideas and projects -------- */
+SY.acts['ai-links'] = () => {
+  const ideas = list('ideas').filter(i => i.status !== 'archived').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 90);
+  const projects = list('projects').filter(p => p.status !== 'done').slice(0, 40);
+  const maps = list('maps').slice(0, 20);
+  if (ideas.length + projects.length + maps.length < 3) { SY.toast('至少要有三条灵感或项目，才找得出关联。'); return; }
+  const key = new Map(), back = new Map();
+  const k = (prefix, d, i) => { const s = prefix + (i + 1); key.set(d.id, s); back.set(s, d.id); return s; };
+  const one = s => String(s || '').replace(/\s+/g, ' ').trim();
+  const lines = [
+    ...projects.map((p, i) => `${k('p', p, i)} | 项目 | ${one(p.name)}${p.goal ? ' — ' + one(p.goal).slice(0, 60) : ''}`),
+    ...ideas.map((x, i) => `${k('i', x, i)} | 灵感 | ${one(x.text).slice(0, 90)}${(x.tags || []).length ? ' #' + x.tags.join(' #') : ''}${x.note ? ' — ' + one(x.note).slice(0, 50) : ''}`),
+    ...maps.map((m, i) => `${k('m', m, i)} | 导图 | ${one(m.title)}`)
+  ].join('\n');
+  const have = list('links').filter(l => key.has(l.source) && key.has(l.target)).map(l => `${key.get(l.source)}-${key.get(l.target)}`);
+  const g = SY.graph.build();
+  g.edges.filter(e => e.kind !== 'tag' && key.has(e.source) && key.has(e.target)).forEach(e => have.push(`${key.get(e.source)}-${key.get(e.target)}`));
+  const RELS = { relates_to: '相关', inspired_by: '受启发于', derived_from: '来源于', part_of: '属于', supports: '支持', contradicts: '矛盾', depends_on: '依赖', similar_to: '相似' };
+  const prompt = `你在帮用户整理个人知识图谱。下面是用户的项目、灵感和导图，每行：编号 | 类型 | 内容。
+
+${lines}
+
+已经有关系的对（不要重复）：${[...new Set(have)].join('，') || '无'}
+
+请找出 4 到 12 对真正有意义、用户自己可能没意识到的关联：同一个问题的不同解法、一个灵感能推进某个项目、两条灵感可以合并、观点相互矛盾等。不要因为都属于“效率”“生活”这种宽泛主题就连起来。
+relation 只能是：${Object.keys(RELS).join('、')}。a→b 的方向要读得通，比如「a supports b」「a inspired_by b」。why 用一句话（不超过 30 个字）说明理由。confidence 是 0 到 1 的把握程度。用简体中文。
+只回复 JSON：{"links":[{"a":"i3","b":"p1","relation":"supports","why":"...","confidence":0.8}]}`;
+  SY.runAI({
+    title: 'AI 找关联', prompt, wide: true, applyLabel: '建立关联',
+    render(r) {
+      const arr = (r && Array.isArray(r.links) ? r.links : []).filter(x => x && back.has(String(x.a)) && back.has(String(x.b)) && x.a !== x.b).slice(0, 16);
+      if (!arr.length) return '';
+      SY.aiLinkCands = arr.map(x => ({ a: back.get(String(x.a)), b: back.get(String(x.b)), relation: RELS[x.relation] ? x.relation : 'relates_to', why: String(x.why || '').slice(0, 80), confidence: Math.max(0, Math.min(1, Number(x.confidence) || 0.5)) }));
+      return `<div class="ai-note">勾选要保留的关联，可以改关系类型。建立后会出现在知识图谱里，也能在「操作记录」里一键撤销。</div>
+        <form id="ai-form" class="ai-f"><div class="ai-list">${SY.aiLinkCands.map((c, k) => `<div class="ai-item ai-link"><input type="checkbox" name="pick" value="${k}" ${c.confidence >= 0.45 ? 'checked' : ''} aria-label="选用">
+          <span class="al-ends"><b>${esc(SY.titleOfId(c.a))}</b><select class="ctl" name="r${k}" style="height:28px">${Object.entries(RELS).map(([rk, rl]) => `<option value="${rk}" ${rk === c.relation ? 'selected' : ''}>${rl}</option>`).join('')}</select><b>${esc(SY.titleOfId(c.b))}</b></span>
+          <span class="why">${esc(c.why)}<span class="mono" style="margin-left:6px;opacity:.6">${Math.round(c.confidence * 100)}%</span></span></div>`).join('')}</div></form>`;
+    },
+    apply() {
+      const fd = new FormData($('#ai-form')), picks = fd.getAll('pick').map(Number);
+      let n = 0;
+      picks.forEach(k => { const c = SY.aiLinkCands[k]; if (!c) return; const l = SY.createLink(c.a, c.b, String(fd.get('r' + k) || c.relation), c.why, 'confirmed'); if (l) { if (l.confidence == null) SY.patch('links', l.id, { confidence: c.confidence }); n++; } });
+      SY.closeModal(); SY.toast(`已建立 ${n} 条关联`);
+      if (S.ui.view !== 'graph') SY.setView('graph');
     }
   });
 };

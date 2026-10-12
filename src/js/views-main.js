@@ -48,7 +48,7 @@ SY.views.today = {
     if (doneToday.length) main += `<div><h2 class="sh">今天完成<span class="n">${doneToday.length}</span></h2><div class="tlist">${doneToday.map(t => taskRow(t)).join('')}</div></div>`;
     const side = `<div class="side-col">
       <div class="panel clay"><h2 class="sh">灵感收件箱<span class="n">${inbox.length}</span><button type="button" class="more" data-act="view" data-v="ideas">全部 →</button></h2>
-        ${inbox.slice(0, 6).map(i => `<div class="iline" tabindex="0" data-open="ideas:${esc(i.id)}">${i.star ? `<span style="color:var(--butter)">${icon('star', 14)}</span>` : ''}<p>${esc(i.text)}</p><span class="age">${esc(ago(i.createdAt))}</span></div>`).join('') || '<div class="empty">收件箱是空的。</div>'}</div>
+        ${inbox.slice(0, 6).map(i => `<div class="iline" tabindex="0" data-open="ideas:${esc(i.id)}">${i.star ? `<span style="color:var(--butter)">${icon('star', 14)}</span>` : ''}<p>${SY.richText(i.text)}</p><span class="age">${esc(ago(i.createdAt))}</span></div>`).join('') || '<div class="empty">收件箱是空的。</div>'}</div>
       <div class="panel clay"><h2 class="sh">进行中的项目<span class="n">${actives.length}</span><button type="button" class="more" data-act="view" data-v="projects">全部 →</button></h2>
         ${actives.map(p => { const s = pStats(p.id); return `<div class="pmini" role="button" tabindex="0" data-act="open-project" data-id="${esc(p.id)}"><span class="top"><span class="dot" style="--c:${cv(pColor(p))}"></span><span class="nm">${esc(p.name)}</span><span class="mono">${s.done}/${s.total}</span></span>${progBar(s)}</div>`; }).join('') || '<div class="empty">还没有进行中的项目。</div>'}</div>
     </div>`;
@@ -107,7 +107,7 @@ function ideaCard(i) {
   return `<div tabindex="0" class="idea clay ${SY.isSel('ideas', i.id) ? 'is-sel' : ''} ${i.status === 'archived' ? 'is-faded' : ''}" data-open="ideas:${esc(i.id)}">
     <span class="idea-band" style="--c:${cv(IDEA_COL[i.status] || 'lav')}"></span>
     <button type="button" class="star ${i.star ? 'is-on' : ''}" data-act="star" data-id="${esc(i.id)}" aria-label="${i.star ? '取消星标' : '加星标'}">${icon('star')}</button>
-    <p class="idea-text">${esc(i.text)}</p>
+    <p class="idea-text">${SY.richText(i.text)}</p>
     <div class="meta">${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}<span class="age ${stale ? 'is-stale' : ''}">${stale ? '已放 ' + d + ' 天' : esc(ago(i.createdAt))}</span>${st}
       ${p ? `<button type="button" class="linkish" data-act="open-project" data-id="${esc(p.id)}">→ ${esc(p.name)}</button>` : ''}${i.note ? '<span>有补充</span>' : ''}</div>
     <div class="row-acts">${acts}</div></div>`;

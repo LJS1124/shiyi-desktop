@@ -27,7 +27,7 @@ function newMap({ title, rootText, ideaId = null, projectId = null, build } = {}
   const root = makeNode(rootText || title || '中心主题', null);
   const nodes = { [root.id]: root };
   if (build) build(nodes, root);
-  const m = SY.put('maps', { id: uid(), title: title || rootText || '未命名导图', rootId: root.id, nodes, ideaId, projectId, createdAt: now() });
+  const m = SY.put('maps', { id: SY.newId('maps'), title: title || rootText || '未命名导图', rootId: root.id, nodes, ideaId, projectId, createdAt: now() });
   S.ui.mapId = m.id; selId = root.id; SY.saveUI();
   return m;
 }
@@ -319,7 +319,7 @@ function toIdea(id) {
   const m = curMap(); const N = nodesOf(m); const n = N[id];
   const path = []; let x = N[n.parent]; while (x) { path.unshift(x.text); x = N[x.parent]; }
   const kids = n.children.map(c => N[c] && N[c].text).filter(Boolean);
-  const i = SY.put('ideas', { id: uid(), text: n.text.trim() || m.title, note: [path.length ? '导图路径：' + path.join(' › ') : '', kids.length ? kids.map(k => '· ' + k).join('\n') : ''].filter(Boolean).join('\n'), tags: ['导图'], status: 'inbox', star: false, projectId: null, createdAt: now() });
+  const i = SY.put('ideas', { id: SY.newId('ideas'), text: n.text.trim() || m.title, note: [path.length ? '导图路径：' + path.join(' › ') : '', kids.length ? kids.map(k => '· ' + k).join('\n') : ''].filter(Boolean).join('\n'), tags: ['导图'], status: 'inbox', star: false, projectId: null, createdAt: now() });
   mutate(nodes => { nodes[id].link = { type: 'idea', id: i.id }; });
   SY.toast('已存到灵感收件箱');
 }

@@ -5,7 +5,7 @@ name: Test
 on:
   push:
     branches: [main]
-    paths: ['core/**', 'src-tauri/**', 'skills/**', '.github/workflows/test.yml']
+    paths: ['core/**', 'src-tauri/**', 'src/**', 'skills/**', 'scripts/**', '.github/workflows/test.yml']
   pull_request:
   workflow_dispatch:
 
@@ -53,3 +53,34 @@ jobs:
       - name: Show errors as annotations
         if: failure()
         run: grep -E "(error|warning)(\[|:)" check.log | head -40 | sed 's/^/::error::/' || true
+
+  gui-e2e:
+    # the real GUI in Chromium against a real database, with the CLI acting as an AI agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+      - name: Build CLI and test bridge
+        working-directory: core
+        run: cargo build --bins --examples
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Playwright
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: End-to-end
+        run: |
+          python scripts/build-preview.py
+          python scripts/e2e/test_app.py e2e-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e-shots
+          if-no-files-found: ignore
