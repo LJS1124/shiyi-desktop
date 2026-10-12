@@ -1,10 +1,17 @@
 name: Build macOS app
 
 # Builds run on demand (Actions → Run workflow) and for version tags, so
-# day-to-day commits don't spend macOS minutes. Pushing a tag like v1.1.0
-# also publishes a GitHub Release with the .dmg attached.
+# day-to-day commits don't spend macOS minutes. A release (with the .dmg
+# attached) is published when the run is started with "发布到 Releases"
+# ticked, when a tag like v1.1.0 is pushed, or when a release is created
+# on GitHub with a new tag.
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: '发布到 Releases（标签 = v + tauri.conf.json 里的版本号）'
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -64,15 +71,25 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes="docs/releases/$GITHUB_REF_NAME.md"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" out/* --clobber
-          elif [ -f "$notes" ]; then
-            gh release create "$GITHUB_REF_NAME" out/* --title "拾忆 $GITHUB_REF_NAME" --notes-file "$notes"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
           else
-            gh release create "$GITHUB_REF_NAME" out/* --title "拾忆 $GITHUB_REF_NAME" --generate-notes
+            tag="v$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
           fi
+          notes="docs/releases/$tag.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" out/* --clobber
+            # a release made by hand on GitHub may have no text yet
+            if [ -z "$(gh release view "$tag" --json body -q .body)" ] && [ -f "$notes" ]; then
+              gh release edit "$tag" --notes-file "$notes"
+            fi
+          else
+            args=(--title "拾忆 $tag" --target "$GITHUB_SHA")
+            if [ -f "$notes" ]; then args+=(--notes-file "$notes"); else args+=(--generate-notes); fi
+            gh release create "$tag" out/* "${args[@]}"
+          fi
+          echo "released $tag: $(gh release view "$tag" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
