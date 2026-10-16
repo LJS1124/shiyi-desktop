@@ -66,7 +66,14 @@ jobs:
         run: |
           # with the signing key, also build the signed packages the in-app updater installs
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then extra=(--config '{"bundle":{"createUpdaterArtifacts":true}}'); else echo "::warning::没有配置 TAURI_SIGNING_PRIVATE_KEY，这次不生成自动更新包（应用里只能手动下载更新）"; extra=(); fi
-          npx tauri build --target universal-apple-darwin "${extra[@]}"
+          set -o pipefail
+          npx tauri build --target universal-apple-darwin "${extra[@]}" 2>&1 | tee build.log
+
+      - name: Show build errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -iE "error|failed|signature|private key|password" build.log | grep -viE "^\s*(Compiling|Checking)" | tail -15 | sed 's/^/::error::/' || true
 
       - name: Collect artifacts
         run: |
@@ -123,7 +130,14 @@ jobs:
         run: |
           # with the signing key, also build the signed packages the in-app updater installs
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then extra=(--config '{"bundle":{"createUpdaterArtifacts":true}}'); else echo "::warning::没有配置 TAURI_SIGNING_PRIVATE_KEY，这次不生成自动更新包（应用里只能手动下载更新）"; extra=(); fi
-          npx tauri build "${extra[@]}"
+          set -o pipefail
+          npx tauri build "${extra[@]}" 2>&1 | tee build.log
+
+      - name: Show build errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -iE "error|failed|signature|private key|password" build.log | grep -viE "^\s*(Compiling|Checking)" | tail -15 | sed 's/^/::error::/' || true
 
       - name: Command line works from a GUI-subsystem exe
         # what an AI agent does: run `shiyi --cli …` with pipes and read JSON
