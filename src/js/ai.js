@@ -103,21 +103,34 @@ SY.acts['ai-project'] = el => {
 项目：${p.name}（${AREA[p.area] || '工作'}）
 完成标准：${p.goal || '（未填写）'}
 ${p.note ? '项目笔记：' + p.note.slice(0, 1500) + '\n' : ''}已有任务：
-${ts.map(t => `- [${TASK_ST[t.status]}] ${t.title}`).join('\n') || '（暂无）'}
-
-要求：3 到 6 条新任务，不要和已有任务重复；每条以动词开头、半天到 5 天能完成；按建议的执行顺序排列；priority 1=高 2=中 3=低；days 为最可能的天数；why 用不超过 20 个字说明为什么需要这一步。用简体中文。
-只回复 JSON：{"tasks":[{"title":"...","priority":2,"days":1,"why":"..."}]}`;
+${ts.map((t, k) => `E${k + 1}. [${TASK_ST[t.status]}] ${t.title}${t.start || t.due ? `（${t.start || '?'} ~ ${t.due || '?'}）` : ''}`).join('\n') || '（暂无）'}
+${p.start || p.due ? `项目时间：${p.start || '未定'} ~ ${p.due || '未定'}\n` : ''}
+要求：3 到 6 条新任务，不要和已有任务重复；每条以动词开头、半天到 5 天能完成；按建议的执行顺序排列；priority 1=高 2=中 3=低；days 为最可能的天数；why 用不超过 20 个字说明为什么需要这一步。
+after 写这条任务开始前必须完成的前置：已有任务写编号字符串（如 "E3"），本次新任务写它在 tasks 里的序号（从 0 开始，只能指向排在前面的）。除非可以马上开始，否则至少写一个前置，日期会据此自动排出。用简体中文。
+只回复 JSON：{"tasks":[{"title":"...","priority":2,"days":1,"after":["E3"],"why":"..."}]}`;
   SY.runAI({
     title: 'AI 补全任务 · ' + p.name, prompt, applyLabel: '添加到待办',
     render(r) {
       const arr = (r && Array.isArray(r.tasks) ? r.tasks : []).filter(x => x && x.title).slice(0, 8);
       if (!arr.length) return '';
-      return `<form id="ai-form" class="ai-f"><div class="ai-list">${arr.map((t, k) => `<div class="ai-item" style="grid-template-columns:22px minmax(0,1fr) auto 64px"><input type="checkbox" name="pick" value="${k}" checked aria-label="选用"><input class="in" name="t${k}" value="${esc(String(t.title).slice(0, 140))}" aria-label="任务标题">${prioSel('p' + k, clampP(t.priority))}<input class="in mono" name="d${k}" value="${numOr(t.days, 1)}" title="工期（天）" aria-label="工期（天）" style="text-align:center">${t.why ? `<div class="why">${esc(String(t.why).slice(0, 60))}</div>` : ''}</div>`).join('')}</div></form>`;
+      // prerequisites: "E3" = existing task #3, 0.. = earlier new task
+      const pre = (x, k) => (Array.isArray(x.after) ? x.after : []).map(a => {
+        const m = /^E(\d+)$/i.exec(String(a).trim());
+        if (m) { const e = ts[Number(m[1]) - 1]; return e ? { key: 'e:' + e.id, label: e.title } : null; }
+        const n = Number(a); return Number.isInteger(n) && n >= 0 && n < k && arr[n] ? { key: 'n:' + n, label: arr[n].title } : null;
+      }).filter(Boolean);
+      return `<form id="ai-form" class="ai-f"><div class="ai-list">${arr.map((x, k) => { const ps = pre(x, k); return `<div class="ai-item" style="grid-template-columns:22px minmax(0,1fr) auto 64px"><input type="checkbox" name="pick" value="${k}" checked aria-label="选用"><input class="in" name="t${k}" value="${esc(String(x.title).slice(0, 140))}" aria-label="任务标题">${prioSel('p' + k, clampP(x.priority))}<input class="in mono" name="d${k}" value="${numOr(x.days, 1)}" title="工期（天）" aria-label="工期（天）" style="text-align:center">${x.why || ps.length ? `<div class="why">${x.why ? esc(String(x.why).slice(0, 60)) : ''}${ps.length ? `${x.why ? ' · ' : ''}等待：${ps.map(q => esc(String(q.label).slice(0, 24))).join('、')}` : ''}</div>` : ''}<input type="hidden" name="a${k}" value="${esc(ps.map(q => q.key).join(','))}"></div>`; }).join('')}</div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" name="sched" checked> 按前置和工期排出日期（只给还没有日期的任务排，已有日期不动；之后可以在甘特图里拖动）</label></form>`;
     },
     apply() {
-      const fd = new FormData($('#ai-form')), picks = fd.getAll('pick').map(Number), base = now();
-      picks.forEach((k, n) => { const title = String(fd.get('t' + k) || '').trim(); if (title) SY.newTask({ title, projectId: p.id, priority: Number(fd.get('p' + k)) || 0, estM: numOr(fd.get('d' + k), 1), createdAt: base + n }); });
-      SY.closeModal(); SY.toast(`已添加 ${picks.length} 个任务`);
+      const fd = new FormData($('#ai-form')), picks = fd.getAll('pick').map(Number), base = now(), idOf = {};
+      picks.forEach((k, n) => { const title = String(fd.get('t' + k) || '').trim(); if (title) idOf[k] = SY.newTask({ title, projectId: p.id, priority: Number(fd.get('p' + k)) || 0, estM: numOr(fd.get('d' + k), 1), createdAt: base + n }).id; });
+      picks.forEach(k => { if (!idOf[k]) return; String(fd.get('a' + k) || '').split(',').filter(Boolean).forEach(key => {
+        const dep = key.startsWith('e:') ? key.slice(2) : idOf[Number(key.slice(2))];
+        if (dep && S.data.tasks.has(dep)) SY.addDep(idOf[k], dep);
+      }); });
+      const r = fd.get('sched') ? SY.autoSchedule(p.id) : null;
+      SY.closeModal(); SY.toast(`已添加 ${Object.keys(idOf).length} 个任务${r && r.n ? `，排好了 ${r.n} 个任务的日期` : ''}`);
     }
   });
 };
