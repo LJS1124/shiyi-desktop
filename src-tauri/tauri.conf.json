@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Shiyi",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "identifier": "app.shiyi.desktop",
   "build": {
     "frontendDist": "../src"
@@ -57,7 +57,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxQUQ3NjVENEE5MjNGRTIKUldUaVA1SktYWGF0UVRlc0J0ZTdnemw1cmp2MkdZUnBGUW8yTml1OXhrZHFkRGk1eTlDK09jS2oK",
       "endpoints": [
         "https://github.com/LJS1124/shiyi-desktop/releases/latest/download/latest.json"
       ],
