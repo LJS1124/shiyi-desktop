@@ -9,6 +9,7 @@
 //! The same crate builds the `shiyi` command line tool, which is how AI agents
 //! use the app: JSON in, JSON out.
 
+pub mod ai;
 pub mod cli;
 mod db;
 mod graph;

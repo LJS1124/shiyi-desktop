@@ -336,14 +336,6 @@ fn net_err(e: reqwest::Error) -> String {
     }
 }
 
-async fn read_json(res: reqwest::Response) -> Result<(reqwest::StatusCode, Value), String> {
-    let status = res.status();
-    let text = res.text().await.map_err(|e| e.to_string())?;
-    let value = serde_json::from_str::<Value>(&text)
-        .unwrap_or_else(|_| json!({ "raw": text.chars().take(300).collect::<String>() }));
-    Ok((status, value))
-}
-
 fn api_err(status: reqwest::StatusCode, v: &Value) -> String {
     let msg = v["error"]["message"]
         .as_str()
@@ -371,69 +363,46 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
         .build()
         .map_err(|e| e.to_string())?;
     let base = s.api_base.trim().trim_end_matches('/').to_string();
-
-    if s.api_format == "openai" {
+    let openai = s.api_format == "openai";
+    let (url, base_body) = if openai {
         let base = if base.is_empty() { "https://api.openai.com/v1".to_string() } else { base };
-        let body = json!({
-            "model": model,
-            "max_tokens": 4096,
-            "messages": [{ "role": "user", "content": prompt }]
-        });
-        let res = client
-            .post(format!("{base}/chat/completions"))
-            .bearer_auth(&key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(net_err)?;
-        let (status, v) = read_json(res).await?;
-        if !status.is_success() {
-            return Err(api_err(status, &v));
-        }
-        v["choices"][0]["message"]["content"]
-            .as_str()
-            .map(|t| t.to_string())
-            .ok_or_else(|| "接口返回里没有文本内容".to_string())
+        (format!("{base}/chat/completions"), json!({ "model": model, "messages": [{ "role": "user", "content": prompt }] }))
     } else {
         let base = if base.is_empty() { "https://api.anthropic.com".to_string() } else { base };
-        let url = if base.ends_with("/v1") {
-            format!("{base}/messages")
+        let url = if base.ends_with("/v1") { format!("{base}/messages") } else { format!("{base}/v1/messages") };
+        (url, json!({ "model": model, "messages": [{ "role": "user", "content": prompt }] }))
+    };
+
+    // A reasoning model can spend the whole budget thinking and return no
+    // text; then try once more with a bigger budget.
+    for (attempt, max_tokens) in [4096u32, 16000].into_iter().enumerate() {
+        let mut body = base_body.clone();
+        body["max_tokens"] = json!(max_tokens);
+        let req = client.post(&url).json(&body);
+        let req = if openai {
+            req.bearer_auth(&key)
         } else {
-            format!("{base}/v1/messages")
+            req.header("x-api-key", &key).header("anthropic-version", "2023-06-01")
         };
-        let body = json!({
-            "model": model,
-            "max_tokens": 4096,
-            "messages": [{ "role": "user", "content": prompt }]
-        });
-        let res = client
-            .post(url)
-            .header("x-api-key", &key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()
-            .await
-            .map_err(net_err)?;
-        let (status, v) = read_json(res).await?;
+        let res = req.send().await.map_err(net_err)?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
         if !status.is_success() {
+            if attempt > 0 {
+                // the provider may cap max_tokens lower; report the first problem
+                break;
+            }
+            let v = serde_json::from_str::<Value>(&text)
+                .unwrap_or_else(|_| json!({ "raw": text.chars().take(300).collect::<String>() }));
             return Err(api_err(status, &v));
         }
-        let text: String = v["content"]
-            .as_array()
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .filter_map(|b| b["text"].as_str())
-                    .collect::<Vec<_>>()
-                    .join("")
-            })
-            .unwrap_or_default();
-        if text.is_empty() {
-            Err("接口返回里没有文本内容".into())
-        } else {
-            Ok(text)
+        match shiyi_core::ai::reply_text(&s.api_format, &text) {
+            Ok(t) => return Ok(t),
+            Err(shiyi_core::ai::NoText::Truncated) => {}
+            Err(e) => return Err(e.message()),
         }
     }
+    Err(shiyi_core::ai::NoText::Truncated.message())
 }
 
 // ---------- app ----------
