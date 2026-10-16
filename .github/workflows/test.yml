@@ -55,7 +55,8 @@ jobs:
       - name: Show errors as annotations
         if: failure()
         run: |
-          grep -E "(error|warning)(\[|:)" check.log | head -40 | sed 's/^/::error::/' || true
+          # one annotation per error block, so multi-line errors (dependency resolution) stay readable
+          awk '/^(error|warning)(\[|:)/{if(b)print b; b=$0; n=0; next} b&&n<14{b=b"%0A"$0; n++} END{if(b)print b}' check.log | head -20 | sed 's/^/::error::/' || true
 
   windows:
     # core tests and a compile check of the desktop shell with the Windows-only code
