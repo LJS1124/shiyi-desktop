@@ -716,3 +716,4 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .upd-h{margin:16px 0 6px;font-size:13px}
 .upd-steps{margin:0;padding-left:20px;font-size:13px;line-height:1.8;color:var(--ink-2)}
 .chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
+.ai-note{margin:0 0 10px;padding:8px 12px;border-radius:10px;background:var(--butter-soft);color:var(--ink-2);font-size:12.5px}

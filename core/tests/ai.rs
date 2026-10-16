@@ -56,3 +56,14 @@ fn refusal_and_unknown_say_what_came_back() {
         Ok(_) => panic!(),
     }
 }
+
+#[test]
+fn cut_off_part_way_keeps_what_arrived() {
+    let b = r#"{"content":[{"type":"thinking","thinking":"…"},{"type":"text","text":"{\"tasks\":[{\"title\":\"a\"},"}],"stop_reason":"max_tokens"}"#;
+    match reply_text("anthropic", b) {
+        Err(NoText::Partial(t)) => assert!(t.starts_with("{\"tasks\"")),
+        other => panic!("{other:?}"),
+    }
+    let b = r#"{"choices":[{"message":{"content":"[1,2"},"finish_reason":"length"}]}"#;
+    assert!(matches!(reply_text("openai", b), Err(NoText::Partial(_))));
+}

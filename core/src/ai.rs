@@ -14,6 +14,9 @@ pub enum NoText {
     /// The reply stopped at the token limit before any text (usually a
     /// reasoning model thinking for the whole budget).
     Truncated,
+    /// The reply was cut off at the token limit part-way through the text;
+    /// carries what did arrive (the app can still use the complete part).
+    Partial(String),
     /// The model refused or a filter blocked the answer.
     Refused(String),
     /// Something else; carries a short excerpt of the reply.
@@ -23,6 +26,7 @@ pub enum NoText {
 impl NoText {
     pub fn message(&self) -> String {
         match self {
+            NoText::Partial(_) => "模型的回复写到一半被截断了".into(),
             NoText::Truncated => "模型把输出额度用完了还没给出正文（常见于推理模型先长时间思考）。可以重试，或在 设置 → AI 接口 里换成非推理模型".into(),
             NoText::Refused(why) => format!("模型拒绝回答或被内容过滤拦下了：{why}"),
             NoText::Unknown(excerpt) => format!("接口返回里没有文本内容，返回的是：{excerpt}"),
@@ -78,8 +82,9 @@ pub fn reply_text(format: &str, body: &str) -> Result<String, NoText> {
 }
 
 fn finish(text: String, stop: &str, v: &Value) -> Result<String, NoText> {
+    let cut = matches!(stop, "length" | "max_tokens");
     if !text.trim().is_empty() {
-        return Ok(text);
+        return if cut { Err(NoText::Partial(text)) } else { Ok(text) };
     }
     match stop {
         "length" | "max_tokens" => Err(NoText::Truncated),

@@ -23,7 +23,7 @@ SY.runAI = async cfg => {
     const html = cfg.render(res);
     if (!html) { $('#m-body').innerHTML = '<p class="ai-err">没有得到可用的建议。补充一些描述后再试。</p>'; $('#m-foot').innerHTML = `<button class="btn" type="button" data-act="close-modal">关闭</button><button class="btn btn-primary" type="button" data-act="ai-retry">重试</button>`; return; }
     SY.aiApply = cfg.apply;
-    $('#m-body').innerHTML = html;
+    $('#m-body').innerHTML = (res && res.__truncated ? '<p class="ai-note">模型的回复写到一半被截断了，下面是其中完整的部分。想要更多可以点「换一版」。</p>' : '') + html;
     $('#m-foot').innerHTML = `<button class="btn btn-ghost" type="button" data-act="ai-retry">${icon('reopen', 14)}换一版</button><span style="flex:1"></span><button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="ai-apply">${esc(cfg.applyLabel || '应用')}</button>`;
   } catch (e) {
     if (my !== runId) return; clearInterval(timer);

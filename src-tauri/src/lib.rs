@@ -375,6 +375,7 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
 
     // A reasoning model can spend the whole budget thinking and return no
     // text; then try once more with a bigger budget.
+    let mut partial: Option<String> = None;
     for (attempt, max_tokens) in [4096u32, 16000].into_iter().enumerate() {
         let mut body = base_body.clone();
         body["max_tokens"] = json!(max_tokens);
@@ -399,10 +400,21 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
         match shiyi_core::ai::reply_text(&s.api_format, &text) {
             Ok(t) => return Ok(t),
             Err(shiyi_core::ai::NoText::Truncated) => {}
+            Err(shiyi_core::ai::NoText::Partial(t)) => {
+                if attempt > 0 {
+                    // still cut off with the bigger budget: hand over what arrived,
+                    // the app keeps the complete items
+                    return Ok(t);
+                }
+                partial = Some(t);
+            }
             Err(e) => return Err(e.message()),
         }
     }
-    Err(shiyi_core::ai::NoText::Truncated.message())
+    match partial {
+        Some(t) => Ok(t),
+        None => Err(shiyi_core::ai::NoText::Truncated.message()),
+    }
 }
 
 // ---------- updates ----------

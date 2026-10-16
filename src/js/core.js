@@ -614,7 +614,29 @@ SY.parseJSON = text => {
   const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch (e) {} }
   const a = t.search(/[\[{]/), b = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+  const fixed = SY.repairJSON(t);
+  if (fixed) { try { const v = JSON.parse(fixed); if (v && typeof v === 'object') { Object.defineProperty(v, '__truncated', { value: true }); return v; } } catch (e) {} }
   throw { code: 'invalid_json', text: t };
+};
+/* A reply cut off mid-way (token limit): keep everything up to the last
+   complete element of the innermost open array, then close the brackets.
+   '{"tasks":[{"a":1},{"b":' → '{"tasks":[{"a":1}]}'. Returns null if nothing usable. */
+SY.repairJSON = text => {
+  const t = String(text || ''), a = t.search(/[\[{]/); if (a < 0) return null;
+  const stack = []; let inStr = false, esc = false, cut = -1, keep = null;
+  for (let i = a; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      if (!stack.length) return t.slice(a, i + 1); // complete after all
+      if (stack[stack.length - 1] === '[') { cut = i + 1; keep = stack.slice(); }
+    }
+  }
+  if (cut < 0) return null;
+  return t.slice(a, cut) + keep.reverse().map(c => (c === '[' ? ']' : '}')).join('');
 };
 
 /* ================= export / import ================= */
