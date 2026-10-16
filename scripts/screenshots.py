@@ -18,7 +18,7 @@ OUT = ROOT / "docs" / "screenshots"
 DB = TMP / "shots.db"
 PORT = 8798
 CLI = ROOT / "core/target/debug/shiyi"
-env = {**os.environ, "SHIYI_DB": str(DB)}
+env = {**os.environ, "SHIYI_DB": str(DB), "SHIYI_FAKE_UPDATE": "none"}
 
 
 def cli(*args, agent="claude"):
@@ -35,12 +35,15 @@ def apply(ops, agent="claude"):
 
 subprocess.run([sys.executable, str(ROOT / "scripts/build-preview.py")], check=True)
 RAW.mkdir(parents=True)
-server = subprocess.Popen([sys.executable, str(ROOT / "scripts/e2e/serve.py"), "--db", str(DB), "--port", str(PORT)])
+server = subprocess.Popen([sys.executable, str(ROOT / "scripts/e2e/serve.py"), "--db", str(DB), "--port", str(PORT)], env=env)
 time.sleep(1.2)
 try:
     with sync_playwright() as p:
         b = p.chromium.launch()
-        pg = b.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=2)
+        ctx = b.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=2)
+        # the screenshots show the Mac app (⌘ / ⌥⇧Space), whatever machine renders them
+        ctx.add_init_script("Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' })")
+        pg = ctx.new_page()
         pg.goto(f"http://127.0.0.1:{PORT}/")
         pg.wait_for_function("window.SY && SY.S.ready && SY.S.data.tasks.size > 0", timeout=10000)
         pg.wait_for_timeout(500)
@@ -100,6 +103,10 @@ try:
         shot("burndown")
         view("kanban", scope="all", kbSwim=False)
         shot("kanban")
+
+        view("calendar", scope="all", calMonth=None)
+        pg.evaluate("SY.S.ui.calMonth = SY.TODAY().slice(0, 7); SY.scheduleRender()")
+        shot("calendar")
 
         # capture an idea: related items are suggested without AI
         view("ideas", ideaFilter="inbox")
