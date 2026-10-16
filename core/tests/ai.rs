@@ -67,3 +67,22 @@ fn cut_off_part_way_keeps_what_arrived() {
     let b = r#"{"choices":[{"message":{"content":"[1,2"},"finish_reason":"length"}]}"#;
     assert!(matches!(reply_text("openai", b), Err(NoText::Partial(_))));
 }
+
+#[test]
+fn budget_ladder() {
+    use shiyi_core::ai::{is_budget_rejection, larger_budget, smaller_budget, START_BUDGET};
+    assert_eq!(START_BUDGET, 16000);
+    assert_eq!(smaller_budget(16000), Some(8192));
+    assert_eq!(smaller_budget(8192), Some(4096));
+    assert_eq!(smaller_budget(4096), None);
+    assert_eq!(larger_budget(16000, None), Some(32000));
+    assert_eq!(larger_budget(32000, None), None);
+    // 16000 was rejected, so after stepping down to 8192 never go back up to it
+    assert_eq!(larger_budget(8192, Some(16000)), None);
+    assert!(is_budget_rejection(400, r#"{"error":{"message":"max_tokens: 16000 > 8192, which is the maximum allowed"}}"#));
+    assert!(is_budget_rejection(400, r#"{"error":{"message":"Invalid max_tokens value, the valid range of max_tokens is [1, 8192]"}}"#));
+    assert!(!is_budget_rejection(401, "invalid api key"));
+    assert!(!is_budget_rejection(429, "rate limit exceeded on tokens per minute"));
+    assert!(!is_budget_rejection(400, r#"{"error":{"message":"model not found"}}"#));
+    assert!(!is_budget_rejection(500, "max_tokens too large"));
+}

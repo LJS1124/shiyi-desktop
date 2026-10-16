@@ -373,12 +373,16 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
         (url, json!({ "model": model, "messages": [{ "role": "user", "content": prompt }] }))
     };
 
-    // A reasoning model can spend the whole budget thinking and return no
-    // text; then try once more with a bigger budget.
+    // Start with a roomy budget (thinking models need it); if the provider
+    // caps max_tokens lower, step down; if the reply is still cut off, step up.
+    use shiyi_core::ai::{self as ai_text, NoText};
+    let mut budget = ai_text::START_BUDGET;
+    let mut ceiling: Option<u32> = None;
     let mut partial: Option<String> = None;
-    for (attempt, max_tokens) in [4096u32, 16000].into_iter().enumerate() {
+    let mut first_err: Option<String> = None;
+    for _ in 0..4 {
         let mut body = base_body.clone();
-        body["max_tokens"] = json!(max_tokens);
+        body["max_tokens"] = json!(budget);
         let req = client.post(&url).json(&body);
         let req = if openai {
             req.bearer_auth(&key)
@@ -389,31 +393,34 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
         let status = res.status();
         let text = res.text().await.map_err(|e| e.to_string())?;
         if !status.is_success() {
-            if attempt > 0 {
-                // the provider may cap max_tokens lower; report the first problem
-                break;
-            }
             let v = serde_json::from_str::<Value>(&text)
                 .unwrap_or_else(|_| json!({ "raw": text.chars().take(300).collect::<String>() }));
-            return Err(api_err(status, &v));
-        }
-        match shiyi_core::ai::reply_text(&s.api_format, &text) {
-            Ok(t) => return Ok(t),
-            Err(shiyi_core::ai::NoText::Truncated) => {}
-            Err(shiyi_core::ai::NoText::Partial(t)) => {
-                if attempt > 0 {
-                    // still cut off with the bigger budget: hand over what arrived,
-                    // the app keeps the complete items
-                    return Ok(t);
+            let err = api_err(status, &v);
+            if ai_text::is_budget_rejection(status.as_u16(), &text) {
+                if let Some(smaller) = ai_text::smaller_budget(budget) {
+                    first_err.get_or_insert(err);
+                    ceiling = Some(budget);
+                    budget = smaller;
+                    continue;
                 }
-                partial = Some(t);
             }
+            return Err(first_err.unwrap_or(err));
+        }
+        match ai_text::reply_text(&s.api_format, &text) {
+            Ok(t) => return Ok(t),
+            Err(NoText::Truncated) => {}
+            Err(NoText::Partial(t)) => partial = Some(t),
             Err(e) => return Err(e.message()),
         }
+        match ai_text::larger_budget(budget, ceiling) {
+            Some(b) => budget = b,
+            None => break,
+        }
     }
+    // still cut off at the largest budget allowed: use what arrived
     match partial {
         Some(t) => Ok(t),
-        None => Err(shiyi_core::ai::NoText::Truncated.message()),
+        None => Err(NoText::Truncated.message()),
     }
 }
 

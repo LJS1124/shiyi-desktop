@@ -121,3 +121,32 @@ fn sse_text(body: &str) -> Result<String, NoText> {
     }
     finish(text, &stop, &Value::String(excerpt(body)))
 }
+
+/// Output budgets tried, smallest to largest. The first request uses
+/// [`START_BUDGET`]: thinking models need room for the reasoning *and* the
+/// answer, and unused budget costs nothing.
+pub const BUDGETS: [u32; 4] = [4096, 8192, 16000, 32000];
+pub const START_BUDGET: u32 = 16000;
+
+/// Did the provider reject the request because `max_tokens` is above its
+/// limit? (Then the same request with a smaller budget will go through.)
+pub fn is_budget_rejection(status: u16, body: &str) -> bool {
+    if !(400..500).contains(&status) || status == 401 || status == 403 || status == 429 {
+        return false;
+    }
+    let b = body.to_lowercase();
+    let mentions_tokens = b.contains("max_tokens") || b.contains("max_completion_tokens") || b.contains("max_output_tokens") || b.contains("token");
+    let says_too_big = ["max_tokens", "too large", "exceed", "maximum", "must be less", "must be <=", "range", "invalid"].iter().any(|w| b.contains(w));
+    mentions_tokens && says_too_big
+}
+
+/// The budget to try after `current` was rejected as too large.
+pub fn smaller_budget(current: u32) -> Option<u32> {
+    BUDGETS.iter().rev().copied().find(|&b| b < current)
+}
+
+/// The budget to try after the reply was cut off at `current`, unless a
+/// budget at or above that was already rejected (`ceiling`).
+pub fn larger_budget(current: u32, ceiling: Option<u32>) -> Option<u32> {
+    BUDGETS.iter().copied().find(|&b| b > current && ceiling.map_or(true, |c| b < c))
+}
