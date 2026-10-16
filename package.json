@@ -1,7 +1,7 @@
 {
   "name": "shiyi-desktop",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "拾忆：灵感、项目与知识图谱，给人也给 AI 用的桌面应用（Tauri 2）",
   "scripts": {
     "tauri": "tauri",

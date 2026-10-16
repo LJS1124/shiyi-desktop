@@ -166,6 +166,17 @@ jobs:
             tag="v$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
           fi
           notes="docs/releases/$tag.md"
+          # a version is released once: the app only offers an update when the
+          # version number changes, so a rebuild under the same number would
+          # never reach anyone. Re-uploading the same commit (e.g. adding the
+          # Windows build later) is fine.
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            tagged=$(git ls-remote --tags origin "refs/tags/$tag^{}" "refs/tags/$tag" | tail -1 | cut -f1)
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "::error::$tag 已经发布过（来自另一个提交）。先把四处版本号改成新的（tauri.conf.json、两个 Cargo.toml、package.json）并写好 docs/releases/v新版本.md，再发布；否则已安装的应用不会提示更新。"
+              exit 1
+            fi
+          fi
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" out/* --clobber
             # a release made by hand on GitHub may have no text yet

@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.1.1-0A84FF" alt="1.1.1">
+  <img src="https://img.shields.io/badge/version-1.1.2-0A84FF" alt="1.1.2">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -215,7 +215,7 @@ cargo run --bin shiyi -- today --pretty       # 直接用命令行（SHIYI_DB=/t
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-推送标签后会自动编译 macOS（universal）和 Windows 版本，并发布到 Releases，附带 dmg、zip 和 Windows 安装包。标签和应用版本号不一致时会直接报错。
+推送标签后会自动编译 macOS（universal）和 Windows 版本，并发布到 Releases，附带 dmg、zip 和 Windows 安装包。标签和应用版本号不一致时会直接报错；同一个版本号只能发布一次（换了代码却不改版本号，已安装的应用不会提示更新，所以打包流程会拒绝）。
 
 不想打标签时，在 Actions → Build apps 里点 Run workflow：「编译哪个平台」可以选 all / macos / windows，勾上「发布到 Releases」就会发布，不勾则安装包只出现在这次运行的附件里。已经发布过的版本可以只选 windows 再补发，不会重编 macOS。
 
