@@ -60,7 +60,13 @@ jobs:
         run: npm install
 
       - name: Build universal app (Apple Silicon + Intel)
-        run: npx tauri build --target universal-apple-darwin
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # with the signing key, also build the signed packages the in-app updater installs
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then extra=(--config '{"bundle":{"createUpdaterArtifacts":true}}'); else echo "::warning::没有配置 TAURI_SIGNING_PRIVATE_KEY，这次不生成自动更新包（应用里只能手动下载更新）"; extra=(); fi
+          npx tauri build --target universal-apple-darwin "${extra[@]}"
 
       - name: Collect artifacts
         run: |
@@ -68,6 +74,8 @@ jobs:
           cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "$GITHUB_WORKSPACE/out/"
           cd src-tauri/target/universal-apple-darwin/release/bundle/macos
           ditto -c -k --keepParent Shiyi.app "$GITHUB_WORKSPACE/out/Shiyi.app.zip"
+          # signed update package for the in-app updater (only when signing is set up)
+          if [ -f Shiyi.app.tar.gz.sig ]; then cp Shiyi.app.tar.gz Shiyi.app.tar.gz.sig "$GITHUB_WORKSPACE/out/"; fi
           ls -lh "$GITHUB_WORKSPACE/out"
 
       - uses: actions/upload-artifact@v4
@@ -109,7 +117,13 @@ jobs:
         run: npm install
 
       - name: Build installer (NSIS, x64)
-        run: npx tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # with the signing key, also build the signed packages the in-app updater installs
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then extra=(--config '{"bundle":{"createUpdaterArtifacts":true}}'); else echo "::warning::没有配置 TAURI_SIGNING_PRIVATE_KEY，这次不生成自动更新包（应用里只能手动下载更新）"; extra=(); fi
+          npx tauri build "${extra[@]}"
 
       - name: Command line works from a GUI-subsystem exe
         # what an AI agent does: run `shiyi --cli …` with pipes and read JSON
@@ -134,6 +148,7 @@ jobs:
         run: |
           mkdir -p out
           cp src-tauri/target/release/bundle/nsis/*-setup.exe out/
+          cp src-tauri/target/release/bundle/nsis/*-setup.exe.sig out/ 2>/dev/null || true
           ls -lh out
 
       - uses: actions/upload-artifact@v4
@@ -177,8 +192,38 @@ jobs:
               exit 1
             fi
           fi
+          # latest.json: what the in-app updater reads (version, notes, signed package per platform).
+          # Platforms built in an earlier run of the same version are kept.
+          mkdir -p prev && gh release download "$tag" -p latest.json -D prev 2>/dev/null || true
+          python3 - "$tag" "$notes" <<'PY'
+          import datetime, glob, json, os, sys
+          tag, notes_file = sys.argv[1], sys.argv[2]
+          base = f"https://github.com/LJS1124/shiyi-desktop/releases/download/{tag}/"
+          sig = lambda f: open(f + ".sig", encoding="utf-8").read().strip()
+          plat = {}
+          if os.path.exists("prev/latest.json"):
+              prev = json.load(open("prev/latest.json", encoding="utf-8"))
+              if prev.get("version") == tag.lstrip("v"):
+                  plat.update(prev.get("platforms", {}))
+          for f in glob.glob("out/*.app.tar.gz"):
+              if os.path.exists(f + ".sig"):
+                  e = {"signature": sig(f), "url": base + os.path.basename(f)}
+                  plat["darwin-aarch64"] = e
+                  plat["darwin-x86_64"] = e
+          for f in glob.glob("out/*-setup.exe"):
+              if os.path.exists(f + ".sig"):
+                  plat["windows-x86_64"] = {"signature": sig(f), "url": base + os.path.basename(f)}
+          if plat:
+              notes = open(notes_file, encoding="utf-8").read() if os.path.exists(notes_file) else ""
+              doc = {"version": tag.lstrip("v"), "notes": notes, "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": plat}
+              json.dump(doc, open("out/latest.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+              print("latest.json platforms:", ", ".join(sorted(plat)))
+          else:
+              print("no signed update packages; latest.json not written")
+          PY
+          files=(); for f in out/*; do case "$f" in *.sig) ;; *) files+=("$f") ;; esac; done
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" out/* --clobber
+            gh release upload "$tag" "${files[@]}" --clobber
             # a release made by hand on GitHub may have no text yet
             if [ -z "$(gh release view "$tag" --json body -q .body)" ] && [ -f "$notes" ]; then
               gh release edit "$tag" --notes-file "$notes"
@@ -186,6 +231,6 @@ jobs:
           else
             args=(--title "拾忆 $tag" --target "$GITHUB_SHA")
             if [ -f "$notes" ]; then args+=(--notes-file "$notes"); else args+=(--generate-notes); fi
-            gh release create "$tag" out/* "${args[@]}"
+            gh release create "$tag" "${files[@]}" "${args[@]}"
           fi
           echo "released $tag: $(gh release view "$tag" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"

@@ -51,6 +51,7 @@ function safetyHtml() {
 }
 
 function stepsHtml() {
+  if (U.app && U.app.auto_update) return `<p class="upd-auto">点「立即更新」：拾忆会在后台下载新版本，核对签名确认是官方发布的，然后自动安装并重启，前后大约一分钟。万一自动更新失败，也可以点「下载安装包」手动更新。</p>`;
   const win = (U.app && U.app.os === 'windows') || SY.isWin;
   if (win) return `<ol class="upd-steps"><li>点「下载安装包」，下载 <span class="mono">-setup.exe</span>。</li><li>关闭拾忆，双击安装包，直接覆盖安装。</li><li>只是升级的话不用先卸载；如果卸载，不要勾选「删除应用数据」。</li></ol>`;
   const cmd = 'xattr -dr com.apple.quarantine /Applications/Shiyi.app';
@@ -65,7 +66,9 @@ function openDialog() {
     <p class="upd-ver">当前 <b class="mono">v${esc(cur)}</b>${p.available ? ` → 最新 <b class="mono">v${esc(p.version)}</b>` : ''}${p.published_at ? ` · 发布于 ${esc(p.published_at.slice(0, 10))}` : ''}</p>
     ${p.available ? safetyHtml() + `<div class="upd-notes">${notesHtml(p.notes) || '<p>这个版本没有写更新说明。</p>'}</div><h4 class="upd-h">怎么更新</h4>${stepsHtml()}` : '<p>你用的就是最新版本。</p>'}`,
     p.available
-      ? `<button class="btn btn-ghost" type="button" data-act="update-skip">跳过这个版本</button><span style="flex:1"></span><button class="btn" type="button" data-act="update-page">在 GitHub 查看</button><button class="btn btn-primary" type="button" data-act="update-download">${icon('down', 14)}下载安装包</button>`
+      ? (U.app && U.app.auto_update
+        ? `<button class="btn btn-ghost" type="button" data-act="update-skip">跳过这个版本</button><span style="flex:1"></span><button class="btn" type="button" data-act="update-download">下载安装包</button><button class="btn btn-primary" type="button" data-act="update-install" id="upd-go">${icon('down', 14)}立即更新</button>`
+        : `<button class="btn btn-ghost" type="button" data-act="update-skip">跳过这个版本</button><span style="flex:1"></span><button class="btn" type="button" data-act="update-page">在 GitHub 查看</button><button class="btn btn-primary" type="button" data-act="update-download">${icon('down', 14)}下载安装包</button>`)
       : `<button class="btn" type="button" data-act="update-page">在 GitHub 查看</button><button class="btn btn-primary" type="button" data-act="close-modal">好</button>`,
     { iconName: 'spark' });
 }
@@ -101,7 +104,31 @@ function aboutBody() {
 }
 function paintAbout() { const el = document.getElementById('s-about'); if (el) el.innerHTML = '<h3>关于</h3>' + aboutBody(); }
 
+/* in-app update: download, verify signature, install, restart (all in the backend) */
+let installing = false;
+async function install() {
+  if (installing) return; installing = true;
+  const foot = document.getElementById('m-foot'), body = document.getElementById('m-body');
+  if (body) body.insertAdjacentHTML('afterbegin', `<div class="upd-prog" id="upd-prog"><div class="upd-bar"><i id="upd-bar" style="width:0%"></i></div><span id="upd-txt">正在下载…</span></div>`);
+  if (foot) foot.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  const T = window.__TAURI__; let un = null;
+  try {
+    if (T && T.event && T.event.listen) un = await T.event.listen('update-progress', e => {
+      const { done, total } = e.payload || {}, bar = document.getElementById('upd-bar'), txt = document.getElementById('upd-txt');
+      const mb = n => (n / 1048576).toFixed(1) + ' MB';
+      if (bar && total) bar.style.width = Math.min(100, done / total * 100).toFixed(0) + '%';
+      if (txt) txt.textContent = total && done >= total ? '下载完成，正在核对签名并安装，完成后会自动重启…' : `正在下载… ${mb(done)}${total ? ' / ' + mb(total) : ''}`;
+    });
+    await SY.invoke('update_install');           // restarts the app when it succeeds
+  } catch (e) {
+    const prog = document.getElementById('upd-prog');
+    if (prog) prog.outerHTML = `<p class="ai-err">自动更新没有完成：${esc(SY.errText(e))}。可以点「下载安装包」手动更新，数据不受影响。</p>`;
+    if (foot) foot.querySelectorAll('button').forEach(b => { b.disabled = false; });
+  } finally { installing = false; if (un) un(); }
+}
+
 Object.assign(SY.acts, {
+  'update-install': () => install(),
   'open-repo': () => open(REPO),
   'update-open': () => openDialog(),
   'update-check': () => check(true),

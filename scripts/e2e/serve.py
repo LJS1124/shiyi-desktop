@@ -48,7 +48,7 @@ def call(cmd, a):
         return {"ok": None}
     if cmd == "app_info":
         import os
-        return {"ok": {"version": "1.1.2", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos"}}
+        return {"ok": {"version": "1.1.2", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
     if cmd == "check_update":
         # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
         import os
@@ -58,6 +58,8 @@ def call(cmd, a):
         return {"ok": {"available": True, "current": "1.1.2", "version": "1.2.0", "tag": "v1.2.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
                        "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.2.0", "asset_name": "Shiyi_1.2.0_universal.dmg",
                        "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.2.0/Shiyi_1.2.0_universal.dmg"}}
+    if cmd == "update_install":
+        return {"err": "检查更新失败：模拟环境不能安装"}
     if cmd == "open_project_url":
         return {"ok": None}
     if cmd == "cli_status":

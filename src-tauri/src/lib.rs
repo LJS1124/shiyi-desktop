@@ -468,15 +468,54 @@ fn open_project_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+/// The updater's public key from tauri.conf.json; empty until signing is set up,
+/// in which case the app falls back to "download the installer".
+fn updater_pubkey(app: &AppHandle) -> String {
+    app.config().plugins.0.get("updater").and_then(|u| u["pubkey"].as_str()).unwrap_or("").trim().to_string()
+}
+
+/// Downloads the signed update, checks its signature against the public key
+/// built into the app, installs it and restarts. Progress goes out as
+/// `update-progress` events. The database is not touched here; the new
+/// version backs it up on its first start (backup_on_upgrade).
 #[tauri::command]
-fn app_info(store: State<'_, Store>) -> Value {
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if updater_pubkey(&app).is_empty() {
+        return Err("这个版本还不支持自动更新，请下载安装包手动更新".into());
+    }
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| format!("检查更新失败：{e}"))?
+        .ok_or_else(|| "已经是最新版本".to_string())?;
+    let mut done: u64 = 0;
+    let progress = app.clone();
+    update
+        .download_and_install(
+            move |chunk, total| {
+                done += chunk as u64;
+                let _ = progress.emit("update-progress", json!({ "done": done, "total": total }));
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("下载或安装失败：{e}"))?;
+    app.restart();
+}
+
+#[tauri::command]
+fn app_info(app: AppHandle, store: State<'_, Store>) -> Value {
     let backups = store.path.parent().map(|p| p.join("backups").display().to_string()).unwrap_or_default();
     json!({
         "version": shiyi_core::VERSION,
         "repo": shiyi_core::update::REPO_URL,
         "data_path": store.path.display().to_string(),
         "backups": backups,
-        "os": if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" }
+        "os": if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" },
+        "auto_update": !updater_pubkey(&app).is_empty() && !cfg!(target_os = "linux")
     })
 }
 
@@ -540,7 +579,20 @@ fn open_store(app: &AppHandle) -> Store {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let context = tauri::generate_context!();
+    // the updater needs the public key; without it the app offers manual download
+    let has_updater_key = context
+        .config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u["pubkey"].as_str())
+        .is_some_and(|k| !k.trim().is_empty());
+    let mut builder = tauri::Builder::default();
+    if has_updater_key {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+    let app = builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let store = open_store(app.handle());
@@ -599,9 +651,10 @@ pub fn run() {
             ai_complete,
             check_update,
             open_project_url,
-            app_info
+            app_info,
+            update_install
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building 拾忆");
 
     app.run(|app_handle, event| {
