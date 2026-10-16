@@ -240,7 +240,7 @@ SY.renderAll = renderAll;
 
 const NAV = [
   ['工作区', [['today', 'sun', '今日', 'butter'], ['ideas', 'bulb', '灵感', 'peach'], ['projects', 'folder', '项目', 'lav']]],
-  ['视图', [['kanban', 'cols', '看板', 'sky'], ['gantt', 'gantt', '甘特图', 'mint'], ['burndown', 'burn', '燃尽图', 'rose'], ['pert', 'net', '网络图 / PERT', 'lav'], ['mindmap', 'mind', '思维导图', 'peach']]],
+  ['视图', [['kanban', 'cols', '看板', 'sky'], ['calendar', 'cal', '日历', 'rose'], ['gantt', 'gantt', '甘特图', 'mint'], ['burndown', 'burn', '燃尽图', 'rose'], ['pert', 'net', '网络图 / PERT', 'lav'], ['mindmap', 'mind', '思维导图', 'peach']]],
   ['知识与 AI', [['graph', 'graph', '知识图谱', 'sky'], ['log', 'clock', '操作记录', 'butter']]]
 ];
 SY.NAV = NAV;
@@ -271,7 +271,7 @@ function renderStatus() {
       <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
     </div>
-    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘8 切换')}<br>Esc 关闭详情</div>
+    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘9 切换')}<br>Esc 关闭详情</div>
     ${SY.updateFootHtml ? SY.updateFootHtml() : ''}`;
 }
 function renderCapture() {
@@ -565,7 +565,7 @@ async function openSettings() {
     </div>
     ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘8')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear' });
 }
@@ -765,7 +765,7 @@ document.addEventListener('keydown', e => {
   }
   if (t.classList && t.classList.contains('insp-title') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); t.blur(); return; }
   if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); SY.focusCapture(); return; }
-  if ((e.metaKey || e.ctrlKey) && /^[1-8]$/.test(e.key)) {
+  if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
     e.preventDefault(); const all = NAV.flatMap(g => g[1]); const it = all[Number(e.key) - 1]; if (it) setView(it[0]); return;
   }
   if (e.key === 'Escape') {

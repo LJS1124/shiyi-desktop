@@ -134,6 +134,19 @@ try:
         pg.wait_for_timeout(500)
         check(pg.locator("#s-perm").count() == 1, "settings show AI access")
         pg.screenshot(path=str(SHOTS / "e2e-settings.png"))
+
+        print("calendar")
+        pg.evaluate("SY.closeModal(); SY.S.ui.calMonth = SY.TODAY().slice(0, 7); SY.setView('calendar')")
+        pg.wait_for_timeout(500)
+        check(pg.locator(".cal-bar").count() > 0, "calendar shows tasks")
+        cell = pg.locator(f'.cal-cell[data-date="{pg.evaluate("SY.TODAY()")}"]').bounding_box()
+        pg.mouse.dblclick(cell["x"] + 30, cell["y"] + cell["height"] - 12)
+        pg.wait_for_timeout(200)
+        pg.keyboard.type("日历测试任务"); pg.keyboard.press("Enter"); pg.wait_for_timeout(1500)
+        got = cli("get", "日历测试任务")
+        doc = got.get("item") or got.get("doc") or got
+        check(pg.evaluate("SY.TODAY()") in json.dumps(doc), "double-click on a day adds a task due that day (seen by the CLI)")
+        pg.screenshot(path=str(SHOTS / "e2e-calendar.png"))
         b.close()
 finally:
     server.terminate()

@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.2.0-0A84FF" alt="1.2.0">
+  <img src="https://img.shields.io/badge/version-1.2.1-0A84FF" alt="1.2.1">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -23,7 +23,7 @@
 ## 亮点
 
 - **随手记，不打断手头的事**：在任何应用里按 <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd>（Windows 上是 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>）唤出记录框；`#标签` 自动归类，`[[标题]]` 双链到别的条目。记下的时候会提示「可能和哪条相关」，这一步只比较文字，不调用 AI。
-- **一个项目，五种视图**：看板、甘特图、燃尽图、网络图（PERT）、思维导图，用的是同一份任务数据。依赖、三点估算和关键路径在各个视图之间是连通的。
+- **一个项目，六种视图**：看板、日历、甘特图、燃尽图、网络图（PERT）、思维导图，用的是同一份任务数据。日历里多天的任务横跨显示，拖动改日期，双击某一天直接加任务，没排期的任务从侧栏拖上去就排好了。依赖、三点估算和关键路径在各个视图之间是连通的。
 - **知识图谱**：手动关联、AI 建议、`[[双链]]`、相同标签、项目归属和依赖，都画在一张图上。可以只看某一条周围的局部关系，也可以拖线建立关联。
 - **AI 原生，但由你掌控**：外部 AI 助手通过命令行读写；内置的 AI 功能只在你点按钮时运行，结果先预览、改完再写入。AI 建的关联必须等你确认才算数，每一批修改都可以撤销。
 - **本地优先**：数据只在本机，每天自动备份；不联网也能用（只有 AI 功能需要联网）。
@@ -165,7 +165,7 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 | --- | --- |
 | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框。macOS 上关闭窗口后应用仍在后台，<kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出；Windows 上关闭窗口就是退出，要用这个快捷键得保持应用运行 |
 | <kbd>⌘</kbd><kbd>K</kbd> | 聚焦记录框；以 `/t ` 开头直接记成任务 |
-| <kbd>⌘</kbd><kbd>1</kbd>–<kbd>8</kbd> | 切换视图 |
+| <kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd> | 切换视图 |
 | `[[` | 在记录框和备注里弹出条目列表，选中即插入双链 |
 | <kbd>Esc</kbd> | 关闭详情 |
 
@@ -241,7 +241,7 @@ src/                  界面（无构建步骤）
   js/related.js       可能相关（与 core/src/related.rs 一致）
   js/agent.js         操作记录、AI 接入设置
   js/views-main.js    今日 / 灵感 / 项目
-  js/kanban.js  gantt.js  burndown.js  pert.js  mindmap.js  ai.js
+  js/kanban.js  calendar.js  gantt.js  burndown.js  pert.js  mindmap.js  ai.js
 src-tauri/            Rust 外壳：接入 core、监听 AI 的修改、安装命令行和技能、AI 代理、导入导出、全局快捷键
   tauri.conf.json     macOS 的窗口和打包配置
   tauri.windows.conf.json  Windows 的覆盖配置（系统标题栏、NSIS 安装包）

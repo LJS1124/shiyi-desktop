@@ -100,7 +100,7 @@ function aboutBody() {
       ${p ? `<button class="btn btn-sm btn-primary" type="button" data-act="update-open">查看 v${esc(p.version)}</button>` : ''}
       <span class="te">${state}</span>
     </div>
-    ${SY.isApp ? `<label class="chk"><input type="checkbox" id="s-auto-upd" ${autoOn() ? 'checked' : ''} data-act="update-auto"> 启动时自动检查新版本（每天最多两次，只访问 GitHub）</label>` : ''}`;
+    ${SY.isApp ? `<label class="opt-chk"><input type="checkbox" id="s-auto-upd" ${autoOn() ? 'checked' : ''} data-act="update-auto"> 启动时自动检查新版本（每天最多两次，只访问 GitHub）</label>` : ''}`;
 }
 function paintAbout() { const el = document.getElementById('s-about'); if (el) el.innerHTML = '<h3>关于</h3>' + aboutBody(); }
 
