@@ -271,7 +271,8 @@ function renderStatus() {
       <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
     </div>
-    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘8 切换')}<br>Esc 关闭详情</div>`;
+    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘8 切换')}<br>Esc 关闭详情</div>
+    ${SY.updateFootHtml ? SY.updateFootHtml() : ''}`;
 }
 function renderCapture() {
   const f = $('#capture'); const task = S.ui.capMode === 'task';
@@ -554,14 +555,15 @@ async function openSettings() {
       <div class="seg" id="s-theme">${[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([k, l]) => `<button type="button" class="${th === k ? 'is-on' : ''}" data-act="theme" data-v="${k}">${l}</button>`).join('')}</div>
     </div>
     <div class="set-sec"><h3>数据</h3>
-      <p>所有数据保存在本机的一个数据库文件里，每天自动备份一份，保留最近 14 天。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
+      <p>所有数据保存在本机的一个数据库文件里，和应用本身分开放，更新或重装应用都不会动它。每天自动备份一份，保留最近 14 天；每次更新版本后第一次打开，还会额外完整备份一份。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${invoke ? `<button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}在访达中显示</button>` : ''}
+        ${invoke ? `<button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}${SY.isMac ? '在访达中显示' : '打开数据文件夹'}</button>` : ''}
         <button class="btn btn-sm" type="button" data-act="export">${icon('down', 14)}导出备份</button>
         <button class="btn btn-sm" type="button" data-act="import">${icon('up', 14)}导入备份</button>
       </div>
     </div>
+    ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
       <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘8')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,

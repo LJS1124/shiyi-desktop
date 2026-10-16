@@ -405,6 +405,62 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
     Err(shiyi_core::ai::NoText::Truncated.message())
 }
 
+// ---------- updates ----------
+
+/// Asks GitHub for the latest release. Never fails loudly: no network just
+/// means no update is shown.
+#[tauri::command]
+async fn check_update() -> Result<Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .user_agent(format!("Shiyi/{}", shiyi_core::VERSION))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let res = client
+        .get(shiyi_core::update::LATEST_API)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(net_err)?;
+    let status = res.status();
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("HTTP {}", status.as_u16()));
+    }
+    let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let os = if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" };
+    Ok(shiyi_core::update::summarize(&v, shiyi_core::VERSION, os))
+}
+
+/// Opens a page of this project (releases, downloads) in the browser.
+#[tauri::command]
+fn open_project_url(url: String) -> Result<(), String> {
+    if !shiyi_core::update::is_project_url(&url) {
+        return Err("只能打开拾忆的 GitHub 页面".into());
+    }
+    let mut cmd = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(windows) {
+        std::process::Command::new("explorer")
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    cmd.arg(&url).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn app_info(store: State<'_, Store>) -> Value {
+    let backups = store.path.parent().map(|p| p.join("backups").display().to_string()).unwrap_or_default();
+    json!({
+        "version": shiyi_core::VERSION,
+        "repo": shiyi_core::update::REPO_URL,
+        "data_path": store.path.display().to_string(),
+        "backups": backups,
+        "os": if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" }
+    })
+}
+
 // ---------- app ----------
 
 fn show_main(app: &AppHandle) {
@@ -441,6 +497,12 @@ fn open_store(app: &AppHandle) -> Store {
     let path = shiyi_core::default_db_path();
     match Core::open(&path) {
         Ok(mut core) => {
+            // before anything else touches the database after an update
+            match core.backup_on_upgrade(shiyi_core::VERSION) {
+                Ok(Some(p)) => eprintln!("拾忆: backup before upgrade at {}", p.display()),
+                Ok(None) => {}
+                Err(e) => eprintln!("拾忆: upgrade backup failed: {e}"),
+            }
             if let Ok(dir) = data_dir(app) {
                 match core.import_legacy_file_once(&dir.join("data.json")) {
                     Ok(Some(r)) => eprintln!("拾忆: imported data.json ({} items)", r["imported"]),
@@ -515,7 +577,10 @@ pub fn run() {
             skill_text,
             get_settings,
             save_settings,
-            ai_complete
+            ai_complete,
+            check_update,
+            open_project_url,
+            app_info
         ])
         .build(tauri::generate_context!())
         .expect("error while building 拾忆");

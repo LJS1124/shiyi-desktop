@@ -46,6 +46,20 @@ def call(cmd, a):
         return {"ok": {"apiFormat": "anthropic", "apiBase": "", "model": "claude-sonnet-5-5", "quickModel": "claude-haiku-5-5", "hasKey": True, "dataPath": args.db}}
     if cmd == "save_settings":
         return {"ok": None}
+    if cmd == "app_info":
+        import os
+        return {"ok": {"version": "1.1.1", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos"}}
+    if cmd == "check_update":
+        # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
+        import os
+        if os.environ.get("SHIYI_FAKE_UPDATE") == "none":
+            return {"ok": {"available": False, "current": "1.1.1", "version": "1.1.1", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
+        notes = (ROOT / "docs/releases/v1.1.1.md").read_text(encoding="utf-8")
+        return {"ok": {"available": True, "current": "1.1.1", "version": "1.2.0", "tag": "v1.2.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
+                       "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.2.0", "asset_name": "Shiyi_1.2.0_universal.dmg",
+                       "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.2.0/Shiyi_1.2.0_universal.dmg"}}
+    if cmd == "open_project_url":
+        return {"ok": None}
     if cmd == "cli_status":
         return {"ok": {"installed": [], "skill_installed": False, "skill_current": False, "db": args.db}}
     with lock:

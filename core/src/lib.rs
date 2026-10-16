@@ -20,6 +20,7 @@ mod ops;
 mod query;
 mod related;
 pub mod time;
+pub mod update;
 mod util;
 
 pub use db::{data_dir, default_db_path, Core};

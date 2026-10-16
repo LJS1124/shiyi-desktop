@@ -203,6 +203,48 @@ impl Core {
         Ok(Some(res))
     }
 
+    /// Before the first run of a new app version: a full copy of the database in
+    /// `<db dir>/backups/upgrade-<old>-to-<new>-<date>.db`, so an update can
+    /// always be rolled back. The newest 5 such copies are kept (daily backups
+    /// are counted separately). Call this before anything that changes the
+    /// schema. Returns the copy made, if any.
+    pub fn backup_on_upgrade(&self, version: &str) -> Result<Option<PathBuf>> {
+        let Some(path) = &self.path else { return Ok(None) };
+        let last = self.meta_get("app_version")?;
+        let from = match last.as_deref() {
+            Some(v) if v == version => return Ok(None),
+            Some(v) => v.to_string(),
+            None => {
+                // versions before 1.1.1 didn't record themselves; a database
+                // with content is an upgrade, an empty one is a fresh install
+                let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM entities", [], |r| r.get(0))?;
+                if n == 0 {
+                    Core::meta_set(&self.conn, "app_version", version)?;
+                    return Ok(None);
+                }
+                "earlier".to_string()
+            }
+        };
+        let dir = path.parent().map(|p| p.join("backups")).unwrap_or_else(|| PathBuf::from("backups"));
+        std::fs::create_dir_all(&dir)?;
+        let clean = |s: &str| s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' { c } else { '_' }).collect::<String>();
+        let target = dir.join(format!("upgrade-{}-to-{}-{}.db", clean(&from), clean(version), self.clock().today()));
+        if !target.exists() {
+            self.conn.execute("VACUUM INTO ?1", [target.to_string_lossy().as_ref()])?;
+        }
+        let mut files: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().map_or(false, |n| n.starts_with("upgrade-") && n.ends_with(".db")))
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .collect();
+        files.sort();
+        while files.len() > 5 {
+            let _ = std::fs::remove_file(files.remove(0).1);
+        }
+        Core::meta_set(&self.conn, "app_version", version)?;
+        Ok(Some(target))
+    }
+
     /// One backup per day in `<db dir>/backups`, keeping the newest `keep`.
     /// Also trims the operation log to the last 180 days.
     pub fn backup_daily(&self, keep: usize) -> Result<Option<PathBuf>> {

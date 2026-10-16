@@ -151,6 +151,12 @@ shiyi schema                                        # 全部字段、操作和�
 2. 双击安装。安装在当前用户下，不需要管理员权限；缺少 WebView2 运行库时安装程序会自动下载。
 3. 安装包没有代码签名，SmartScreen 可能提示「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。
 
+### 更新
+
+有新版本时，侧栏底部会出现「新版本 vX.Y.Z 可以更新」，点开能看到更新说明和下载按钮（也可以在 设置 → 关于 里手动检查，或关掉自动检查）。下载后直接覆盖安装即可。
+
+**更新不会丢数据**：数据库和应用本身分开存放（位置见下面的「数据」），覆盖安装只替换应用。新版本第一次打开时，还会先把整个数据库完整备份到 `backups/upgrade-旧版本-to-新版本-日期.db`，出了问题可以退回。
+
 ## 快捷键
 
 Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>（<kbd>Alt</kbd><kbd>Shift</kbd> 是输入法切换键，会冲突）。
@@ -166,7 +172,7 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 ## 数据
 
 - **位置**：macOS 是 `~/Library/Application Support/app.shiyi.desktop/shiyi.db`，Windows 是 `%APPDATA%\app.shiyi.desktop\shiyi.db`（SQLite），可以用环境变量 `SHIYI_DB` 改到别处。
-- **备份**：每天自动备份一份到 `backups/shiyi-日期.db`，保留最近 14 天；操作记录保留 180 天。
+- **备份**：每天自动备份一份到 `backups/shiyi-日期.db`，保留最近 14 天；每次升级后第一次打开另存一份 `backups/upgrade-…db`，保留最近 5 次；操作记录保留 180 天。
 - **导出 / 导入**：「设置 → 数据」可以导出、导入 JSON。网页预览导出的备份和旧版备份都能导入，导入本身也能撤销。
 - **从旧版升级**：升级时会自动把旧的 `data.json` 导入数据库，原文件改名为 `data.json.imported`。
 - **API Key**：存在同目录的 `settings.json` 里，不会离开本机（macOS 上文件权限是 600）。
