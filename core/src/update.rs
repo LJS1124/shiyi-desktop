@@ -73,3 +73,59 @@ pub fn is_project_url(url: &str) -> bool {
     }
     url == REPO_URL || url.starts_with(&format!("{REPO_URL}/"))
 }
+
+/// The manifest published with every release (also what the in-app updater
+/// reads). Served from GitHub's download CDN, so unlike the REST API it has no
+/// per-IP rate limit.
+pub const MANIFEST_URL: &str = "https://github.com/LJS1124/shiyi-desktop/releases/latest/download/latest.json";
+
+/// Same shape as [`summarize`], built from `latest.json`:
+/// `{version, notes, pub_date, platforms: {"darwin-aarch64": {url, signature}, …}}`.
+pub fn summarize_manifest(m: &Value, current: &str, os: &str) -> Option<Value> {
+    let version = m["version"].as_str()?.trim().trim_start_matches(['v', 'V']).to_string();
+    parse_version(&version)?;
+    let tag = format!("v{version}");
+    let base = format!("{REPO_URL}/releases/download/{tag}/");
+    // the installer people download by hand (the updater packages are not meant for that)
+    let (asset_name, asset_url) = match os {
+        "macos" => {
+            let n = format!("Shiyi_{version}_universal.dmg");
+            (Some(n.clone()), Some(format!("{base}{n}")))
+        }
+        "windows" => match m["platforms"]["windows-x86_64"]["url"].as_str() {
+            Some(u) if u.starts_with(&format!("{REPO_URL}/")) => (u.rsplit('/').next().map(str::to_string), Some(u.to_string())),
+            _ => {
+                let n = format!("Shiyi_{version}_x64-setup.exe");
+                (Some(n.clone()), Some(format!("{base}{n}")))
+            }
+        },
+        _ => (None, None),
+    };
+    Some(json!({
+        "available": is_newer(&version, current),
+        "current": current,
+        "version": version,
+        "tag": tag,
+        "title": format!("拾忆 {tag}"),
+        "notes": m["notes"].as_str().unwrap_or("").chars().take(4000).collect::<String>(),
+        "published_at": m["pub_date"].as_str().unwrap_or(""),
+        "page": format!("{REPO_URL}/releases/tag/{tag}"),
+        "asset_name": asset_name,
+        "asset_url": asset_url,
+    }))
+}
+
+/// A readable reason for a failed request to GitHub.
+pub fn http_reason(status: u16, body: &str) -> String {
+    let b = body.to_lowercase();
+    if status == 429 || (status == 403 && (b.contains("rate limit") || b.is_empty() || b.contains("api rate"))) {
+        return format!("HTTP {status}：GitHub 限制了这个网络的访问频率（同一出口 IP 每小时 60 次，用代理或公司网络时常见），稍后再试");
+    }
+    if status == 403 {
+        return format!("HTTP {status}：GitHub 拒绝了这次请求，可能是网络或代理拦截");
+    }
+    if status == 404 {
+        return format!("HTTP {status}：没有找到发布信息");
+    }
+    format!("HTTP {status}")
+}

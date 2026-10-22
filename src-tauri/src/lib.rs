@@ -430,25 +430,43 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<Stri
 /// means no update is shown.
 #[tauri::command]
 async fn check_update() -> Result<Value, String> {
+    use shiyi_core::update as up;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
         .user_agent(format!("Shiyi/{}", shiyi_core::VERSION))
         .build()
         .map_err(|e| e.to_string())?;
+    let os = if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" };
+    // 1) latest.json from the release downloads: no rate limit
+    let mut first_err: Option<String> = None;
+    match client.get(up::MANIFEST_URL).send().await {
+        Ok(res) if res.status().is_success() => {
+            let text = res.text().await.map_err(|e| e.to_string())?;
+            if let Some(v) = serde_json::from_str::<Value>(&text).ok().and_then(|m| up::summarize_manifest(&m, shiyi_core::VERSION, os)) {
+                return Ok(v);
+            }
+        }
+        Ok(res) => {
+            let s = res.status().as_u16();
+            let body = res.text().await.unwrap_or_default();
+            first_err = Some(up::http_reason(s, &body));
+        }
+        Err(e) => first_err = Some(net_err(e)),
+    }
+    // 2) the REST API (rate limited per IP), e.g. for a release without latest.json
     let res = client
-        .get(shiyi_core::update::LATEST_API)
+        .get(up::LATEST_API)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(net_err)?;
+        .map_err(|e| first_err.clone().unwrap_or_else(|| net_err(e)))?;
     let status = res.status();
     let text = res.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
-        return Err(format!("HTTP {}", status.as_u16()));
+        return Err(up::http_reason(status.as_u16(), &text));
     }
     let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let os = if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" };
-    Ok(shiyi_core::update::summarize(&v, shiyi_core::VERSION, os))
+    Ok(up::summarize(&v, shiyi_core::VERSION, os))
 }
 
 /// Opens a page of this project (releases, downloads) in the browser.

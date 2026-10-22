@@ -84,7 +84,7 @@ async function check(manual) {
     else if (pending()) SY.toast(`拾忆 v${info.version} 可以更新了`, { action: { label: '查看', fn: openDialog }, ms: 9000 });
   } catch (e) {
     U.err = SY.errText(e);
-    if (manual) SY.toast('检查更新失败：' + U.err + '（可能是网络连不上 GitHub）', { ms: 6000 });
+    if (manual) SY.toast('检查更新失败：' + U.err, { ms: 8000 });
   } finally { U.checking = false; paintAbout(); SY.scheduleRender(); }
 }
 SY.checkUpdate = check;

@@ -151,3 +151,30 @@ fn project_url_rejects_traversal_and_tricks() {
     assert!(!is_project_url(&format!("{REPO_URL}/a b")));
     assert!(is_project_url(&format!("{REPO_URL}/releases/download/v1.2.0/Shiyi_1.2.0_universal.dmg")));
 }
+
+#[test]
+fn manifest_summary() {
+    use shiyi_core::update::{summarize_manifest, REPO_URL};
+    let m: serde_json::Value = serde_json::from_str(r#"{"version":"1.2.2","notes":"拾忆 1.2.2：改进","pub_date":"2026-10-22T08:00:00Z",
+      "platforms":{"darwin-aarch64":{"url":"https://github.com/LJS1124/shiyi-desktop/releases/download/v1.2.2/Shiyi.app.tar.gz","signature":"x"},
+                   "windows-x86_64":{"url":"https://github.com/LJS1124/shiyi-desktop/releases/download/v1.2.2/Shiyi_1.2.2_x64-setup.exe","signature":"y"}}}"#).unwrap();
+    let mac = summarize_manifest(&m, "1.2.1", "macos").unwrap();
+    assert_eq!(mac["available"], true);
+    assert_eq!(mac["version"], "1.2.2");
+    assert_eq!(mac["asset_url"], format!("{REPO_URL}/releases/download/v1.2.2/Shiyi_1.2.2_universal.dmg"));
+    assert_eq!(mac["page"], format!("{REPO_URL}/releases/tag/v1.2.2"));
+    let win = summarize_manifest(&m, "1.2.2", "windows").unwrap();
+    assert_eq!(win["available"], false);
+    assert_eq!(win["asset_name"], "Shiyi_1.2.2_x64-setup.exe");
+    assert!(summarize_manifest(&serde_json::json!({"notes": "x"}), "1.0.0", "macos").is_none());
+    assert!(summarize_manifest(&serde_json::json!({"version": "abc"}), "1.0.0", "macos").is_none());
+}
+
+#[test]
+fn http_reasons_are_readable() {
+    use shiyi_core::update::http_reason;
+    assert!(http_reason(403, r#"{"message":"API rate limit exceeded for 1.2.3.4."}"#).contains("访问频率"));
+    assert!(http_reason(429, "").contains("访问频率"));
+    assert!(http_reason(403, "<html>blocked by proxy</html>").contains("拒绝"));
+    assert!(http_reason(404, "").contains("没有找到"));
+}
