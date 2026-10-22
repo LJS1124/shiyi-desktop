@@ -1295,7 +1295,7 @@ fn node(text: &str, parent: Option<&str>) -> (String, Value) {
 
 /// Describes how a mind map's `nodes` changed, for the operation log (e.g. `添加节点「预算」`).
 fn describe_node_changes(before: &Value, after: &Value) -> String {
-    const FIELDS: [&str; 7] = ["id", "text", "parent", "children", "collapsed", "color", "link"];
+    const FIELDS: [&str; 8] = ["id", "text", "parent", "children", "collapsed", "color", "link", "w"];
     let empty = Map::new();
     let b = before.as_object().unwrap_or(&empty);
     let a = after.as_object().unwrap_or(&empty);
@@ -1359,6 +1359,8 @@ fn describe_node_changes(before: &Value, after: &Value) -> String {
     }
     if shapes.iter().any(|d| matches!(d.as_slice(), ["collapsed"])) {
         "折叠或展开节点".to_string()
+    } else if !shapes.is_empty() && shapes.iter().all(|d| matches!(d.as_slice(), ["w"])) {
+        "调整节点宽度".to_string()
     } else if shapes.iter().any(|d| d.contains(&"link")) {
         "关联到任务或灵感".to_string()
     } else {

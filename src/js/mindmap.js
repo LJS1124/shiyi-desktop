@@ -97,7 +97,9 @@ SY.views.mindmap = {
       else if (n.link && n.link.type === 'project') { const p = getP(n.link.id); lk = p ? `<span class="lk" data-act="open-project" role="button" data-id="${esc(p.id)}" title="打开项目">项目</span>` : ''; }
       const kids = n.children.filter(c => N[c]);
       const fold = d > 0 && kids.length ? `<span class="fold ${s}" data-fold="${esc(id)}" title="${n.collapsed ? '展开' : '折叠'}">${n.collapsed ? '+' + (subtreeIds(N, id).length - 1) : '−'}</span>` : '';
-      nodes.push(`<div class="mnode lv${Math.min(d, 2)} ${id === selId ? 'is-sel' : ''}" data-mid="${esc(id)}" style="--b:${cv(b)};--b-soft:${cv(b, '-soft')};--b-ink:${cv(b, '-ink')};visibility:hidden">${n.text ? esc(n.text) : '<span style="opacity:.45">未命名</span>'}${lk}${fold}</div>`);
+      const wid = Number(n.w) > 0 ? `width:${Math.round(n.w)}px;max-width:none;` : '';
+      const rz = `<i class="mm-rz ${d === 0 ? 'r' : s}" data-rz="${esc(id)}" title="拖动调整宽度，双击恢复自动"></i>`;
+      nodes.push(`<div class="mnode lv${Math.min(d, 2)} ${id === selId ? 'is-sel' : ''} ${wid ? 'has-w' : ''}" data-mid="${esc(id)}" style="${wid}--b:${cv(b)};--b-soft:${cv(b, '-soft')};--b-ink:${cv(b, '-ink')};visibility:hidden">${n.text ? esc(n.text) : '<span style="opacity:.45">未命名</span>'}${lk}${fold}${rz}</div>`);
       if (!n.collapsed) kids.forEach(visit);
     };
     visit(m.rootId);
@@ -106,7 +108,7 @@ SY.views.mindmap = {
       <div class="mm-layout">${listHtml}<div class="mm-main">${tb}
         <div class="canvas-wrap dotted" id="mm-wrap"><div class="canvas" id="mm-canvas"><svg id="mm-svg"></svg>${nodes.join('')}</div>
           <div class="canvas-tools"><button type="button" class="icon-btn clay-btn sm" data-act="mm-zoom-out" aria-label="缩小">${icon('minus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="mm-zoom-in" aria-label="放大">${icon('plus')}</button><button type="button" class="icon-btn clay-btn sm" data-act="mm-fit" aria-label="适应窗口">${icon('fit')}</button></div>
-          <div class="canvas-hint">Tab 子节点 · Enter 同级 · 空格或双击编辑 · Delete 删除 · 方向键移动 · ${SY.keys('⌘Z')} 撤销 · 拖动节点到另一个节点上可换父级</div>
+          <div class="canvas-hint">Tab 子节点 · Enter 同级 · 空格或双击编辑 · Delete 删除 · 方向键移动 · ${SY.keys('⌘Z')} 撤销 · 拖动节点到另一个节点上可换父级 · 拖节点外侧边缘调宽度</div>
         </div></div></div>`;
   },
   after(root) {
@@ -155,22 +157,28 @@ SY.views.mindmap = {
     SY.mmPZ = { pz, W, H };
     if (fresh) { const r = wrap.getBoundingClientRect(); st.x = r.width / 2 - rp.x; st.y = r.height / 2 - rp.y; pz.apply(); }
     // keep selected node in view
-    const se = els.get(selId);
-    if (se && !fresh) {
+    const se = els.get(selId), revealKey = m.id + '|' + selId;
+    if (se && !fresh && revealKey !== lastRevealed) {
       const r = wrap.getBoundingClientRect(), nx = parseFloat(se.style.left) * st.k + st.x, ny = parseFloat(se.style.top) * st.k + st.y, nw = se.offsetWidth * st.k, nh = se.offsetHeight * st.k;
       let moved = false;
       if (nx < 20) { st.x += 20 - nx; moved = true; } else if (nx + nw > r.width - 20) { st.x -= nx + nw - r.width + 20; moved = true; }
       if (ny < 20) { st.y += 20 - ny; moved = true; } else if (ny + nh > r.height - 70) { st.y -= ny + nh - r.height + 70; moved = true; }
       if (moved) pz.apply();
     }
+    lastRevealed = revealKey;
     canvas.querySelectorAll('.mnode').forEach(el => {
       el.addEventListener('click', e => {
+        if (e.target.closest('[data-rz]')) return;
         const f = e.target.closest('[data-fold]');
         if (f) { const id = f.dataset.fold; mutate(nodes => { nodes[id].collapsed = !nodes[id].collapsed; }); return; }
         if (e.target.closest('.lk')) return;
         if (selId !== el.dataset.mid) { selId = el.dataset.mid; SY.renderAll(); }
       });
-      el.addEventListener('dblclick', e => { e.preventDefault(); selId = el.dataset.mid; startEdit(selId); });
+      el.addEventListener('dblclick', e => {
+        e.preventDefault();
+        if (e.target.closest('[data-rz]')) { const id = el.dataset.mid; mutate(nodes => { if (nodes[id]) delete nodes[id].w; }); return; }
+        selId = el.dataset.mid; startEdit(selId);
+      });
       el.addEventListener('pointerdown', e => nodeDown(e, el, wrap, st));
     });
     if (pendingEdit && els.has(pendingEdit)) { const id = pendingEdit; pendingEdit = null; startEdit(id); }
@@ -291,7 +299,23 @@ function startEdit(id) {
   ta.addEventListener('blur', () => finish(true));
 }
 
+let lastRevealed = null;
+
+/* drag the outer edge of a node to set its width; double-click the edge for automatic width */
+function resizeDown(e, el, st) {
+  e.stopPropagation(); e.preventDefault();
+  const id = el.dataset.mid, h = e.target, left = h.classList.contains('l'), w0 = el.offsetWidth, k = st.k || 1;
+  let w = w0;
+  SY.drag(e, {
+    threshold: 1,
+    onStart() { el.classList.add('is-resizing'); },
+    onMove(ev, dx) { w = Math.max(60, Math.min(720, Math.round(w0 + (left ? -dx : dx) / k))); el.style.width = w + 'px'; el.style.maxWidth = 'none'; },
+    onEnd() { el.classList.remove('is-resizing'); if (Math.abs(w - w0) >= 2) mutate(nodes => { if (nodes[id]) nodes[id].w = w; }); }
+  });
+}
+
 function nodeDown(e, el, wrap, st) {
+  if (e.target.closest('[data-rz]')) return resizeDown(e, el, st);
   if (e.button !== 0 || e.target.closest('[data-fold],.lk')) return;
   const m = curMap(); const id = el.dataset.mid; if (!m || id === m.rootId) return;
   let over = null;

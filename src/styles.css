@@ -769,3 +769,11 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .cal-add{position:fixed;z-index:96;width:280px;padding:10px;border-radius:12px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--sh-float)}
 .cal-daylist{display:flex;flex-direction:column;gap:8px}
 @media (max-width:1100px){.cal-wrap{grid-template-columns:1fr}.cal-side{position:static;max-height:none}}
+
+/* mind map: width handle on the outer edge */
+.mm-rz{position:absolute;top:6px;bottom:6px;width:8px;cursor:ew-resize;border-radius:4px;opacity:0;transition:opacity .12s,background .12s}
+.mm-rz.r{right:-4px}.mm-rz.l{left:-4px}
+.mnode:hover .mm-rz,.mnode.is-sel .mm-rz,.mnode.is-resizing .mm-rz{opacity:1;background:color-mix(in srgb,var(--b,var(--lav)) 35%,transparent)}
+.mm-rz:hover,.mnode.is-resizing .mm-rz{background:var(--b,var(--lav))!important}
+.mnode.has-w{white-space:pre-wrap}
+.mnode.is-resizing{transition:none;box-shadow:var(--sh-sm),0 0 0 2px var(--b,var(--lav))}

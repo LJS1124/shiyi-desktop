@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.2.1-0A84FF" alt="1.2.1">
+  <img src="https://img.shields.io/badge/version-1.2.2-0A84FF" alt="1.2.2">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -64,7 +64,7 @@
 
 ### 思维导图
 
-<kbd>Tab</kbd> 加子节点，<kbd>Enter</kbd> 加同级节点，拖动可以换父节点。节点或整个分支可以一键转成任务、项目或灵感。
+<kbd>Tab</kbd> 加子节点，<kbd>Enter</kbd> 加同级节点，拖动可以换父节点；文字长的节点，拖它外侧的边缘就能拉宽，双击边缘恢复自动宽度。节点或整个分支可以一键转成任务、项目或灵感。
 
 ![思维导图](docs/screenshots/mindmap.png)
 

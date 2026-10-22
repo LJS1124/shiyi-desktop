@@ -157,7 +157,7 @@ pub static MAP: TypeDef = TypeDef {
     fields: &[
         f("title", Kind::Text, &["name"], "标题", "map title"),
         f("root_id", Kind::Text, &["root"], "根节点", "id of the root node (managed)"),
-        f("nodes", Kind::Json, &[], "节点", "{node_id: {id, text, parent, children[], collapsed, color, link:{type,id}|null}} (prefer `outline`)"),
+        f("nodes", Kind::Json, &[], "节点", "{node_id: {id, text, parent, children[], collapsed, color, link:{type,id}|null, w (optional width in px)}} (prefer `outline`)"),
         f("idea_id", Kind::Ref("idea"), &["idea"], "灵感", "idea this map expands"),
         f("project_id", Kind::Ref("project"), &["project"], "项目", "project this map belongs to"),
         f("sample", Kind::Bool, &[], "示例", "true for example data created on first run"),

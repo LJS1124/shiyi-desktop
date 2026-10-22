@@ -86,6 +86,7 @@ function nodeChanges(b, a) {
   if (parts.length) return parts.join('、');
   const diff = both.filter(k => JSON.stringify(b[k]) !== JSON.stringify(a[k]));
   if (diff.some(k => JSON.stringify({ ...b[k], collapsed: null }) === JSON.stringify({ ...a[k], collapsed: null }))) return '折叠或展开节点';
+  if (diff.every(k => JSON.stringify({ ...b[k], w: null }) === JSON.stringify({ ...a[k], w: null }))) return '调整节点宽度';
   if (diff.some(k => JSON.stringify(b[k].link ?? null) !== JSON.stringify(a[k].link ?? null))) return '关联到任务或灵感';
   return '调整节点';
 }
