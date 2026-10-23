@@ -1,6 +1,6 @@
 [package]
 name = "shiyi-core"
-version = "1.2.4"
+version = "1.3.0"
 edition = "2021"
 description = "拾忆 core: SQLite store, operation log with undo, knowledge graph, and the `shiyi` CLI for humans and AI agents"
 license = "MIT"

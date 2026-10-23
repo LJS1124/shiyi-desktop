@@ -59,6 +59,11 @@ jobs:
       - name: Install Tauri CLI
         run: npm install
 
+      - name: Provider logos (open-source LobeHub icons; optional)
+        run: |
+          npm install --no-save @lobehub/icons-static-svg || echo "::warning::icon package unavailable; letter badges will be shown"
+          node scripts/provider-icons.mjs
+
       - name: Build universal app (Apple Silicon + Intel)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -122,6 +127,11 @@ jobs:
 
       - name: Install Tauri CLI
         run: npm install
+
+      - name: Provider logos (open-source LobeHub icons; optional)
+        run: |
+          npm install --no-save @lobehub/icons-static-svg || echo "::warning::icon package unavailable; letter badges will be shown"
+          node scripts/provider-icons.mjs
 
       - name: Build installer (NSIS, x64)
         env:

@@ -133,6 +133,8 @@ try:
         pg.evaluate("SY.closeInsp(); SY.acts['settings']()")
         pg.wait_for_timeout(500)
         check(pg.locator("#s-perm").count() == 1, "settings show AI access")
+        check(pg.locator(".mp-card").count() == 12, "settings list the 12 model providers")
+        check("使用中" in pg.inner_text("#mp-detail"), "the provider in use is selected")
         pg.screenshot(path=str(SHOTS / "e2e-settings.png"))
 
         print("calendar")

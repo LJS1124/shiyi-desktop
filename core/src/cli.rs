@@ -353,6 +353,7 @@ fn run(sess: &Session, a: &Args) -> Result<Value> {
             sess.open()?.import(data, &sess.actor)
         }
         "skill" => skill(a),
+        "providers" => Ok(json!({ "ok": true, "providers": crate::providers::catalog_json() })),
         "permission" => sess.query(json!({ "q": "settings" })),
         _ => {
             if let Some(td) = model::type_def(cmd) {

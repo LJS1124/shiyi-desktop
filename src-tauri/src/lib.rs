@@ -30,11 +30,61 @@ struct Store {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 struct Settings {
+    // the provider in use; these five fields always mirror it, so the AI
+    // call path reads one place
     api_format: String,
     api_base: String,
     api_key: String,
     model: String,
     quick_model: String,
+    /// id from shiyi_core::providers::CATALOG
+    provider: String,
+    /// every provider the user has set up, so switching keeps their keys
+    providers: std::collections::BTreeMap<String, ProviderCfg>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct ProviderCfg {
+    api_format: String,
+    api_base: String,
+    api_key: String,
+    model: String,
+    quick_model: String,
+}
+
+impl Settings {
+    /// Settings from before providers existed: file the single setup under the
+    /// provider its address belongs to.
+    fn migrate(mut self) -> Self {
+        if self.provider.is_empty() {
+            self.provider = shiyi_core::providers::guess(&self.api_base, &self.api_format).to_string();
+        }
+        if !self.providers.contains_key(&self.provider) {
+            self.providers.insert(
+                self.provider.clone(),
+                ProviderCfg {
+                    api_format: self.api_format.clone(),
+                    api_base: self.api_base.clone(),
+                    api_key: self.api_key.clone(),
+                    model: self.model.clone(),
+                    quick_model: self.quick_model.clone(),
+                },
+            );
+        }
+        self
+    }
+
+    fn activate(&mut self, id: &str) {
+        if let Some(c) = self.providers.get(id).cloned() {
+            self.provider = id.to_string();
+            self.api_format = c.api_format;
+            self.api_base = c.api_base;
+            self.api_key = c.api_key;
+            self.model = c.model;
+            self.quick_model = c.quick_model;
+        }
+    }
 }
 
 impl Default for Settings {
@@ -45,6 +95,8 @@ impl Default for Settings {
             api_key: String::new(),
             model: "claude-sonnet-5-5".into(),
             quick_model: "claude-haiku-5-5".into(),
+            provider: String::new(),
+            providers: Default::default(),
         }
     }
 }
@@ -58,6 +110,22 @@ struct PublicSettings {
     quick_model: String,
     has_key: bool,
     data_path: String,
+    provider: String,
+    /// per provider: format, address, models, whether a key is saved and its masked form
+    providers: Value,
+    catalog: Value,
+}
+
+fn write_settings(app: &AppHandle, s: &Settings) -> Result<(), String> {
+    let path = data_dir(app)?.join("settings.json");
+    let bytes = serde_json::to_vec_pretty(s).map_err(|e| e.to_string())?;
+    write_atomic(&path, &bytes)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -76,8 +144,9 @@ fn read_settings(app: &AppHandle) -> Settings {
     data_dir(app)
         .ok()
         .and_then(|d| fs::read_to_string(d.join("settings.json")).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
         .unwrap_or_default()
+        .migrate()
 }
 
 fn home() -> PathBuf {
@@ -299,31 +368,126 @@ fn skill_text() -> String {
 #[tauri::command]
 fn get_settings(app: AppHandle, store: State<'_, Store>) -> Result<PublicSettings, String> {
     let s = read_settings(&app);
+    let providers: serde_json::Map<String, Value> = s
+        .providers
+        .iter()
+        .map(|(id, c)| {
+            (id.clone(), json!({
+                "apiFormat": c.api_format, "apiBase": c.api_base, "model": c.model, "quickModel": c.quick_model,
+                "hasKey": !c.api_key.trim().is_empty(), "keyHint": shiyi_core::providers::key_hint(&c.api_key)
+            }))
+        })
+        .collect();
     Ok(PublicSettings {
+        has_key: !s.api_key.trim().is_empty(),
         api_format: s.api_format,
         api_base: s.api_base,
         model: s.model,
         quick_model: s.quick_model,
-        has_key: !s.api_key.trim().is_empty(),
         data_path: store.path.display().to_string(),
+        provider: s.provider,
+        providers: Value::Object(providers),
+        catalog: shiyi_core::providers::catalog_json(),
     })
+}
+
+/// Saves one provider's setup and (with `activate`) makes it the one in use.
+/// `api_key: None` keeps the saved key; `Some("")` removes it.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderInput {
+    api_format: String,
+    api_base: String,
+    model: String,
+    quick_model: String,
+    api_key: Option<String>,
+}
+
+#[tauri::command]
+fn save_provider(app: AppHandle, provider: String, cfg: ProviderInput, activate: bool) -> Result<(), String> {
+    if shiyi_core::providers::get(&provider).is_none() {
+        return Err(format!("未知的服务商：{provider}"));
+    }
+    let mut s = read_settings(&app);
+    let old = s.providers.get(&provider).cloned().unwrap_or_default();
+    let fmt = if cfg.api_format == "anthropic" { "anthropic" } else { "openai" };
+    s.providers.insert(
+        provider.clone(),
+        ProviderCfg {
+            api_format: fmt.into(),
+            api_base: cfg.api_base.trim().to_string(),
+            api_key: cfg.api_key.map(|k| k.trim().to_string()).unwrap_or(old.api_key),
+            model: cfg.model.trim().to_string(),
+            quick_model: cfg.quick_model.trim().to_string(),
+        },
+    );
+    if activate || s.provider == provider {
+        s.activate(&provider);
+    }
+    write_settings(&app, &s)
+}
+
+/// The models a provider offers (its `/models` endpoint), using the saved key.
+#[tauri::command]
+async fn list_models(app: AppHandle, provider: String) -> Result<Vec<String>, String> {
+    let s = read_settings(&app);
+    let c = s.providers.get(&provider).cloned().ok_or("先填好这个服务商的 Key 并保存")?;
+    let url = shiyi_core::providers::models_url(&c.api_format, &c.api_base);
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let mut req = client.get(&url);
+    if !c.api_key.trim().is_empty() {
+        req = if c.api_format == "anthropic" {
+            req.header("x-api-key", c.api_key.trim()).header("anthropic-version", "2023-06-01")
+        } else {
+            req.bearer_auth(c.api_key.trim())
+        };
+    }
+    let res = req.send().await.map_err(net_err)?;
+    let status = res.status();
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let v = serde_json::from_str::<Value>(&text).unwrap_or_else(|_| json!({ "raw": text.chars().take(300).collect::<String>() }));
+        return Err(api_err(status, &v));
+    }
+    let models = shiyi_core::providers::parse_models(&text);
+    if models.is_empty() {
+        return Err("这个服务商没有返回模型列表，可以直接手动填写模型名".into());
+    }
+    Ok(models)
+}
+
+/// Opens a provider's key page in the browser (allowlisted hosts only).
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !shiyi_core::providers::is_allowed_external(&url) {
+        return Err("只能打开模型服务商的官方页面".into());
+    }
+    let mut cmd = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(windows) {
+        std::process::Command::new("explorer")
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    cmd.arg(&url).spawn().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings, keep_key: bool) -> Result<(), String> {
+    // older single-provider form: apply to the provider in use
+    let cur = read_settings(&app);
     let mut s = settings;
     if keep_key {
-        s.api_key = read_settings(&app).api_key;
+        s.api_key = cur.api_key.clone();
     }
-    let path = data_dir(&app)?.join("settings.json");
-    let bytes = serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?;
-    write_atomic(&path, &bytes)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    s.providers = cur.providers;
+    s.provider = if s.provider.is_empty() { cur.provider } else { s.provider };
+    s.providers.insert(
+        s.provider.clone(),
+        ProviderCfg { api_format: s.api_format.clone(), api_base: s.api_base.clone(), api_key: s.api_key.clone(), model: s.model.clone(), quick_model: s.quick_model.clone() },
+    );
+    write_settings(&app, &s)
 }
 
 fn net_err(e: reqwest::Error) -> String {
@@ -347,8 +511,12 @@ fn api_err(status: reqwest::StatusCode, v: &Value) -> String {
 }
 
 #[tauri::command]
-async fn ai_complete(app: AppHandle, prompt: String, quick: bool) -> Result<String, String> {
-    let s = read_settings(&app);
+async fn ai_complete(app: AppHandle, prompt: String, quick: bool, provider: Option<String>) -> Result<String, String> {
+    let mut s = read_settings(&app);
+    // "测试连接" on a provider that isn't the one in use
+    if let Some(id) = provider.filter(|id| s.providers.contains_key(id)) {
+        s.activate(&id);
+    }
     let key = s.api_key.trim().to_string();
     if key.is_empty() {
         return Err("NO_KEY".into());
@@ -670,7 +838,10 @@ pub fn run() {
             check_update,
             open_project_url,
             app_info,
-            update_install
+            update_install,
+            save_provider,
+            list_models,
+            open_external
         ])
         .build(context)
         .expect("error while building 拾忆");

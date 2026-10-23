@@ -39,23 +39,44 @@ proc = None
 if not args.preview:
     proc = subprocess.Popen([args.bridge, args.db], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
 
+FAKE = {"provider": "deepseek", "providers": {"deepseek": {"apiFormat": "anthropic", "apiBase": "https://api.deepseek.com/anthropic", "model": "deepseek-flash", "quickModel": "deepseek-flash", "key": "sk-test-0000a1b2"}}}
+
 def call(cmd, a):
     if cmd == "skill_text":
         return {"ok": (ROOT / "skills/shiyi/SKILL.md").read_text(encoding="utf-8")}
     if cmd == "get_settings":
-        return {"ok": {"apiFormat": "anthropic", "apiBase": "", "model": "claude-sonnet-5-5", "quickModel": "claude-haiku-5-5", "hasKey": True, "dataPath": args.db}}
+        if "catalog" not in FAKE:
+            out = subprocess.run([str(ROOT / "core/target/debug/shiyi"), "providers", "--compact"], capture_output=True, text=True)
+            FAKE["catalog"] = json.loads(out.stdout)["providers"]
+        provs = {k: {**v, "hasKey": bool(v.get("key")), "keyHint": ("••••" + v["key"][-4:]) if v.get("key") else ""} for k, v in FAKE["providers"].items()}
+        for v in provs.values(): v.pop("key", None)
+        a = FAKE["providers"].get(FAKE["provider"], {})
+        return {"ok": {"apiFormat": a.get("apiFormat", "anthropic"), "apiBase": a.get("apiBase", ""), "model": a.get("model", ""), "quickModel": a.get("quickModel", ""),
+                       "hasKey": bool(a.get("key")), "dataPath": args.db, "provider": FAKE["provider"], "providers": provs, "catalog": FAKE["catalog"]}}
     if cmd == "save_settings":
         return {"ok": None}
+    if cmd == "save_provider":
+        cfg, old = a["cfg"], FAKE["providers"].get(a["provider"], {})
+        FAKE["providers"][a["provider"]] = {"apiFormat": cfg["apiFormat"], "apiBase": cfg["apiBase"], "model": cfg["model"], "quickModel": cfg["quickModel"],
+                                            "key": cfg["apiKey"] if cfg.get("apiKey") is not None else old.get("key", "")}
+        if a.get("activate"): FAKE["provider"] = a["provider"]
+        return {"ok": None}
+    if cmd == "list_models":
+        return {"ok": ["deepseek-chat", "deepseek-reasoner"] if a["provider"] == "deepseek" else ["model-a", "model-b", "model-c"]}
+    if cmd == "open_external":
+        FAKE["opened"] = a["url"]; return {"ok": None}
+    if cmd == "ai_complete":
+        return {"ok": "你好"}
     if cmd == "app_info":
         import os
-        return {"ok": {"version": "1.2.4", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
+        return {"ok": {"version": "1.3.0", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
     if cmd == "check_update":
         # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
         import os
         if os.environ.get("SHIYI_FAKE_UPDATE") == "none":
-            return {"ok": {"available": False, "current": "1.2.4", "version": "1.2.4", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
+            return {"ok": {"available": False, "current": "1.3.0", "version": "1.3.0", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
         notes = (ROOT / "docs/releases/v1.1.1.md").read_text(encoding="utf-8")
-        return {"ok": {"available": True, "current": "1.2.4", "version": "1.3.0", "tag": "v1.3.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
+        return {"ok": {"available": True, "current": "1.3.0", "version": "1.3.0", "tag": "v1.3.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
                        "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.3.0", "asset_name": "Shiyi_1.3.0_universal.dmg",
                        "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.3.0/Shiyi_1.3.0_universal.dmg"}}
     if cmd == "update_install":

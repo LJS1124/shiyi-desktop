@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.2.4-0A84FF" alt="1.2.4">
+  <img src="https://img.shields.io/badge/version-1.3.0-0A84FF" alt="1.3.0">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -121,7 +121,7 @@ shiyi schema                                        # 全部字段、操作和�
 
 ## 内置 AI 功能
 
-内置 AI 用的是你在「设置 → AI 接口」里填的模型，支持 Anthropic Messages 接口，也支持 OpenAI 兼容格式（LiteLLM、自建网关等）。API Key 只保存在本机。
+在「设置 → AI 模型」里选一家服务商、填上 API Key 就能用：DeepSeek、阿里云百炼、月之暗面 Kimi、智谱 GLM、火山方舟豆包、硅基流动、Anthropic、OpenAI、Google Gemini、OpenRouter、本地 Ollama，以及自定义的 OpenAI 兼容网关（LiteLLM 等）。接口地址和格式自动填好，模型可以一键从服务商拉取；每家的 Key 分开保存，切换不丢，只保存在本机。服务商图标来自开源的 [LobeHub Icons](https://github.com/lobehub/lobe-icons)（MIT）。
 
 所有内置 AI 功能都要你手动点才会运行。结果先在弹窗里预览，可以修改、取消勾选，确认后才写入；写入的内容带「AI · …」标记，可以在操作记录里整批撤销。
 

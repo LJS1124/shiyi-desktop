@@ -6,3 +6,4 @@ out/
 preview/
 core/target
 core/Cargo.lock
+src/assets/providers/

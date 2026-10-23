@@ -17,6 +17,7 @@ pub mod install;
 mod legacy;
 pub mod model;
 mod ops;
+pub mod providers;
 mod query;
 mod related;
 pub mod time;

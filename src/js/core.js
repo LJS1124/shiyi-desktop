@@ -537,7 +537,7 @@ async function openSettings() {
   const th = S.ui.theme;
   if (SY.loadAiAccess) SY.loadAiAccess();
   openModal('设置', `
-    <div class="set-sec"><h3>AI 接口</h3>
+    ${invoke && SY.modelSection && st.catalog ? SY.modelSection(st) : `<div class="set-sec"><h3>AI 接口</h3>
       ${invoke ? '' : SY.sampleFn ? '<p><b>网页预览里，AI 通过你的 Claude 账号运行</b>，下面这些设置在预览里不起作用；装到 Mac 上以后才用这里填的接口和 Key。</p>' : '<p>浏览器预览模式下不能调用 AI，安装桌面版后可用。</p>'}
       <p>支持 Anthropic 官方接口，也支持兼容 OpenAI 格式的网关（如 LiteLLM、自建代理）。API Key 只保存在本机。</p>
       <div class="ai-grid">
@@ -548,7 +548,7 @@ async function openSettings() {
       </div>
       <label class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:600">API Key<input class="in mono" id="s-key" type="password" placeholder="${st.hasKey ? '已保存（留空则不修改）' : 'sk-…'}" autocomplete="off"></label>
       <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-sm" type="button" data-act="settings-test" ${invoke || SY.sampleFn ? '' : 'disabled'}>测试连接</button><span id="s-test" class="te"></span></div>
-    </div>
+    </div>`}
     ${SY.aiAccessSection ? SY.aiAccessSection() : ''}
     <div class="set-sec"><h3>外观</h3>
       <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
@@ -567,12 +567,17 @@ async function openSettings() {
     <div class="set-sec"><h3>快捷键</h3>
       <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
-    `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear' });
+    `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear', wide: true });
 }
 function readSettingsForm() {
   return { apiFormat: $('#s-format').value, apiBase: $('#s-base').value.trim(), model: $('#s-model').value.trim() || 'claude-sonnet-5-5', quickModel: $('#s-quick').value.trim() || 'claude-haiku-5-5', apiKey: $('#s-key').value.trim() };
 }
 async function saveSettings(close = true) {
+  if (document.getElementById('s-models')) {
+    const ok = await SY.saveModelPanel(); if (!ok) return false;
+    if (close) { closeModal(); toast('设置已保存'); }
+    return true;
+  }
   const f = readSettingsForm();
   if (invoke) { try { await invoke('save_settings', { settings: f, keepKey: !f.apiKey }); } catch (e) { toast('保存设置失败：' + e); return false; } }
   if (close) { closeModal(); toast('设置已保存'); }
