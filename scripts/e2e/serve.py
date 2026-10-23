@@ -48,14 +48,14 @@ def call(cmd, a):
         return {"ok": None}
     if cmd == "app_info":
         import os
-        return {"ok": {"version": "1.2.3", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
+        return {"ok": {"version": "1.2.4", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
     if cmd == "check_update":
         # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
         import os
         if os.environ.get("SHIYI_FAKE_UPDATE") == "none":
-            return {"ok": {"available": False, "current": "1.2.3", "version": "1.2.3", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
+            return {"ok": {"available": False, "current": "1.2.4", "version": "1.2.4", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
         notes = (ROOT / "docs/releases/v1.1.1.md").read_text(encoding="utf-8")
-        return {"ok": {"available": True, "current": "1.2.3", "version": "1.3.0", "tag": "v1.3.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
+        return {"ok": {"available": True, "current": "1.2.4", "version": "1.3.0", "tag": "v1.3.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
                        "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.3.0", "asset_name": "Shiyi_1.3.0_universal.dmg",
                        "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.3.0/Shiyi_1.3.0_universal.dmg"}}
     if cmd == "update_install":

@@ -139,6 +139,11 @@
 .is-app.is-mac[data-skin="native"] body{background:transparent}
 .is-app.is-mac[data-skin="native"] .side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
 .is-app.is-mac[data-skin="native"] .main{background:var(--bg)}
+/* the sidebar is see-through to the native material; blurring see-through pixels
+   (backdrop-filter) smears it into blobs, so dialogs only dim the window here */
+.is-app.is-mac .modal{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(30,26,40,.28)}
+.is-app.is-mac[data-theme="dark"] .modal{background:rgba(0,0,0,.45)}
+@media (prefers-color-scheme:dark){.is-app.is-mac:not([data-theme="light"]) .modal{background:rgba(0,0,0,.45)}}
 
 /* =====================================================================
    mono — 素白高密度
