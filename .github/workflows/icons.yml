@@ -1,0 +1,30 @@
+name: Update provider icons
+
+# Fetches the model provider logos from the open-source LobeHub icon set (MIT)
+# and commits them to src/assets/providers, so previews and screenshots show
+# them too (the app build also refreshes them).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch icons
+        run: |
+          npm install --no-save @lobehub/icons-static-svg
+          node scripts/provider-icons.mjs
+          ls -la src/assets/providers
+      - name: Commit if changed
+        run: |
+          git add -f src/assets/providers
+          if git diff --cached --quiet; then echo "::notice::icons unchanged"; exit 0; fi
+          git -c user.name=LJS1124 -c user.email=LJS1124@users.noreply.github.com commit -m "更新模型服务商图标（LobeHub Icons，MIT）"
+          git push
