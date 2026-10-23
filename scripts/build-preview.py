@@ -28,6 +28,9 @@ js = "\n".join((SRC / s).read_text(encoding="utf-8").replace("</script", "<\\/sc
 import json
 skill = (ROOT / "skills" / "shiyi" / "SKILL.md").read_text(encoding="utf-8")
 js = "window.__SHIYI_SKILL__ = " + json.dumps(skill, ensure_ascii=False).replace("</", "<\\/") + ";\n" + js
+# model provider logos (the app loads them from assets/providers; the single-file preview can't)
+icons = {f.stem: "data:image/svg+xml;base64," + base64.b64encode(f.read_bytes()).decode() for f in sorted((SRC / "assets" / "providers").glob("*.svg"))}
+js = "window.__SHIYI_PROVIDER_ICONS__ = " + json.dumps(icons) + ";\n" + js
 
 page = f"""<title>拾忆</title>
 <style>

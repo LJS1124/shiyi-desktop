@@ -16,7 +16,7 @@ const ready = id => { const c = prov(id), s = saved(id); return !!(c && s && (s.
    icon set); a letter badge in the brand colour when the file is missing */
 function logo(p, size = 28) {
   const letter = (p.name.match(/[A-Za-z一-龥]/) || ['?'])[0].toUpperCase();
-  return `<span class="mp-ico" style="--sz:${size}px;--bc:${esc(p.color)}"><b>${esc(letter)}</b><img src="assets/providers/${esc(p.id)}.svg" alt="" onerror="this.remove()"></span>`;
+  return `<span class="mp-ico" style="--sz:${size}px;--bc:${esc(p.color)}"><b>${esc(letter)}</b><img src="${esc((window.__SHIYI_PROVIDER_ICONS__ || {})[p.id] || `assets/providers/${p.id}.svg`)}" alt="" onerror="this.parentNode.classList.add('no-img');this.remove()"></span>`;
 }
 
 const REGION = { global: '海外', cn: '国内', local: '本地与自定义' };

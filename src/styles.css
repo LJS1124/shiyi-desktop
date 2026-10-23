@@ -790,8 +790,9 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .mp-dot{position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 2px var(--mint-soft)}
 .mp-use{position:absolute;top:5px;right:5px;font-style:normal;font-size:10px;line-height:16px;padding:0 5px;border-radius:6px;background:var(--lav);color:#fff}
 .mp-ico{position:relative;flex:none;width:var(--sz);height:var(--sz);border-radius:calc(var(--sz) * .26);background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);display:grid;place-items:center;overflow:hidden}
-.mp-ico b{position:absolute;inset:0;display:grid;place-items:center;background:var(--bc);color:#fff;font-size:calc(var(--sz) * .48);font-weight:800}
-.mp-ico img{position:relative;width:72%;height:72%;object-fit:contain}
+.mp-ico b{position:absolute;inset:0;display:none;place-items:center;background:var(--bc);color:#fff;font-size:calc(var(--sz) * .48);font-weight:800}
+.mp-ico.no-img b{display:grid}
+.mp-ico img{position:relative;width:70%;height:70%;object-fit:contain}
 .mp-detail{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:14px;background:var(--clay);box-shadow:inset 0 0 0 1px var(--line);min-width:0}
 .mp-head{display:flex;align-items:center;gap:12px}
 .mp-name{font-size:15px;font-weight:750;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
