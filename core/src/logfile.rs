@@ -24,9 +24,10 @@ pub fn append(path: &Path, line: &str, max_bytes: u64) -> std::io::Result<()> {
     writeln!(f, "{one_line}")
 }
 
-/// The last `n` lines (empty when there is no log yet).
+/// The last `n` lines, reaching into the rotated file when the current one is
+/// short (empty when there is no log yet).
 pub fn tail(path: &Path, n: usize) -> Vec<String> {
-    let text = fs::read_to_string(path).unwrap_or_default();
+    let text = fs::read_to_string(path.with_extension("log.1")).unwrap_or_default() + "\n" + &fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     lines[lines.len().saturating_sub(n)..].iter().map(|s| s.to_string()).collect()
 }

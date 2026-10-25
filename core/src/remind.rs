@@ -27,11 +27,15 @@ pub fn minutes_of_day(now_ms: i64, offset_s: i64) -> u32 {
     ((now_ms.div_euclid(1000) + offset_s).rem_euclid(86_400) / 60) as u32
 }
 
+/// After this, a morning summary that was missed is skipped for the day.
+pub const LATE: u32 = 21 * 60;
+
 /// Show today's summary now? Once a day, at or after the chosen time
-/// (opening the laptop at 10:30 with a 09:00 summary still shows it).
+/// (opening the laptop at 10:30 with a 09:00 summary still shows it), but
+/// not late at night unless that is the chosen time.
 pub fn is_due(now_minutes: u32, at: &str, today: &str, last_sent: Option<&str>) -> bool {
     let at = parse_hhmm(at).or_else(|| parse_hhmm(DEFAULT_TIME)).unwrap_or(540);
-    last_sent != Some(today) && now_minutes >= at
+    last_sent != Some(today) && now_minutes >= at && (now_minutes < LATE || at >= LATE)
 }
 
 fn clip(s: &str, n: usize) -> String {
@@ -62,7 +66,7 @@ pub fn daily_message(today: &Value) -> Option<(String, String)> {
     let titles: Vec<String> = overdue.iter().chain(planned.iter()).filter_map(|t| t["title"].as_str()).filter(|t| !t.trim().is_empty()).take(3).map(|t| clip(t, 18)).collect();
     let total = overdue.len() + planned.len();
     let mut list = titles.join("、");
-    if total > titles.len() {
+    if total > titles.len() && !titles.is_empty() {
         list.push_str(" 等");
     }
     let date = today["date"].as_str().unwrap_or("");

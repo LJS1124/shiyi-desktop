@@ -149,7 +149,8 @@ pub const MAX_ISSUE_URL: usize = 7000;
 /// "New issue" on this project with the title and body filled in. A body that
 /// would make the link too long is cut, with a note to paste the rest.
 pub fn issue_url(title: &str, body: &str) -> String {
-    let head = format!("{REPO_URL}/issues/new?title={}&body=", percent_encode(title.trim()));
+    let title: String = title.trim().chars().take(120).collect();
+    let head = format!("{REPO_URL}/issues/new?title={}&body=", percent_encode(&title));
     let full = percent_encode(body);
     if head.len() + full.len() <= MAX_ISSUE_URL {
         return head + &full;

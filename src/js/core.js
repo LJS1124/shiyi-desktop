@@ -22,6 +22,13 @@ const num = v => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
 const isYmd = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+/* the last 20 errors, for 设置 → 关于 → 诊断信息 (the message only, never data) */
+SY.noteError = (msg, where = 'page') => {
+  try { const r = lsGet('shiyi.errors') || []; r.push({ t: Date.now(), w: where, m: String(msg || '').replace(/\s+/g, ' ').slice(0, 300) }); lsSet('shiyi.errors', r.slice(-20)); } catch (e) {}
+};
+window.addEventListener('error', e => SY.noteError((e.message || 'error') + (e.filename ? ` (${String(e.filename).split('/').pop()}:${e.lineno})` : '')));
+window.addEventListener('unhandledrejection', e => { const r = e.reason; SY.noteError(r && typeof r === 'object' ? (r.message || r.code || JSON.stringify(r)) : String(r), 'promise'); });
+{ const ce = console.error.bind(console); console.error = (...a) => { try { SY.noteError(a.map(x => (x && x.message) || (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' '), 'console'); } catch (_) {} ce(...a); }; }
 function isoWeek(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dn = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - dn + 3);
@@ -557,6 +564,7 @@ async function openSettings() {
       <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="seg" id="s-theme">${[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([k, l]) => `<button type="button" class="${th === k ? 'is-on' : ''}" data-act="theme" data-v="${k}">${l}</button>`).join('')}</div>
     </div>
+    ${SY.prefsSection ? SY.prefsSection(st) : ''}
     <div class="set-sec"><h3>数据</h3>
       <p>所有数据保存在本机的一个数据库文件里，和应用本身分开放，更新或重装应用都不会动它。每天自动备份一份，保留最近 14 天；每次更新版本后第一次打开，还会额外完整备份一份。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}

@@ -50,6 +50,16 @@ fn is_due_waits_for_the_chosen_time() {
 }
 
 #[test]
+fn is_due_skips_a_missed_morning_late_at_night() {
+    assert!(is_due(20 * 60 + 59, "09:00", "2026-10-12", None));
+    assert!(!is_due(21 * 60, "09:00", "2026-10-12", None));
+    assert!(!is_due(23 * 60 + 59, "09:00", "2026-10-12", None));
+    // a summary chosen for the evening still comes
+    assert!(is_due(22 * 60, "21:30", "2026-10-12", None));
+    assert!(!is_due(21 * 60 + 29, "21:30", "2026-10-12", None));
+}
+
+#[test]
 fn is_due_only_once_per_day() {
     assert!(!is_due(600, "09:00", "2026-10-12", Some("2026-10-12")));
     assert!(is_due(600, "09:00", "2026-10-12", Some("2026-10-11")));
@@ -167,7 +177,6 @@ fn daily_message_title_without_date_is_generic() {
 }
 
 #[test]
-#[ignore = "daily_message appends ' 等' when every listed title is blank, so the body becomes '有 1 件任务已经逾期： 等'"]
 fn daily_message_blank_titles_do_not_add_etc() {
     let v = json!({
         "date": "2026-10-12",

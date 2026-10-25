@@ -946,8 +946,12 @@ fn diagnostics(app: AppHandle, store: State<'_, Store>) -> Value {
     let backups = store.path.parent().map(|p| p.join("backups"));
     let last_backup = backups
         .and_then(|d| fs::read_dir(d).ok())
-        .map(|it| it.filter_map(|e| e.ok()).filter_map(|e| e.file_name().into_string().ok()).filter(|n| n.ends_with(".db")).max())
-        .unwrap_or_default();
+        .and_then(|it| {
+            it.filter_map(|e| e.ok())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter_map(|n| n.strip_prefix("shiyi-").and_then(|d| d.strip_suffix(".db")).map(str::to_string))
+                .max()
+        });
     json!({
         "version": shiyi_core::VERSION,
         "os": std::env::consts::OS,

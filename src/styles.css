@@ -801,6 +801,7 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .mp-st.is-use{background:var(--lav);color:#fff}
 .mp-f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:600}
 .mp-f .te{font-weight:500}
+.mp-f .in{color:var(--ink);font-weight:500}
 .mp-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mp-row .in{flex:1;min-width:0}
 .mp-models{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -839,3 +840,10 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .pal-foot{display:flex;gap:14px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)}
 .pal-foot span{display:inline-flex;align-items:center;gap:5px}
 .pal-n{margin-left:auto}
+
+/* settings: reminders, diagnostics */
+.pref-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pref-row select.ctl{width:96px}
+.set-sec .opt-chk{white-space:normal}
+.te.ok{color:var(--mint-ink)} .te.bad{color:var(--rose-ink)}
+pre.diag{margin:0;padding:12px 14px;border-radius:12px;background:var(--clay-2);font-family:var(--f-mono);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;user-select:text;-webkit-user-select:text;color:var(--ink-2)}

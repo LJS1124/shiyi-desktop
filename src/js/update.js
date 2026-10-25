@@ -94,11 +94,12 @@ SY.aboutSection = () => `<div class="set-sec" id="s-about"><h3>关于</h3>${abou
 function aboutBody() {
   const a = U.app, p = pending();
   const state = U.checking ? '正在检查…' : U.err ? '上次检查失败：' + esc(U.err) : p ? `有新版本 v${esc(p.version)}` : U.info ? '已经是最新版本' : '';
-  return `<p>拾忆 ${a ? `<b class="mono">v${esc(a.version)}</b>` : ''} · 开源在 <button type="button" class="link-btn" data-act="open-repo">GitHub</button>，问题和建议欢迎提 Issue。</p>
+  return `<p>拾忆 ${a ? `<b class="mono">v${esc(a.version)}</b>` : ''} · 开源在 <button type="button" class="link-btn" data-act="open-repo">GitHub</button>，遇到问题或有建议，点右边的「反馈问题」，会带上诊断信息在 GitHub 上提一个 Issue。</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-sm" type="button" data-act="update-check" ${U.checking ? 'disabled' : ''}>${icon('down', 14)}检查更新</button>
       ${p ? `<button class="btn btn-sm btn-primary" type="button" data-act="update-open">查看 v${esc(p.version)}</button>` : ''}
       <span class="te">${state}</span>
+      <span style="flex:1"></span>${SY.diagButtons ? SY.diagButtons() : ''}
     </div>
     ${SY.isApp ? `<label class="opt-chk"><input type="checkbox" id="s-auto-upd" ${autoOn() ? 'checked' : ''} data-act="update-auto"> 启动时自动检查新版本（每天最多两次，只访问 GitHub）</label>` : ''}`;
 }
