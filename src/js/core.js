@@ -22,6 +22,13 @@ const num = v => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
 const isYmd = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+/* the last 20 errors, for 设置 → 关于 → 诊断信息 (the message only, never data) */
+SY.noteError = (msg, where = 'page') => {
+  try { const r = lsGet('shiyi.errors') || []; r.push({ t: Date.now(), w: where, m: String(msg || '').replace(/\s+/g, ' ').slice(0, 300) }); lsSet('shiyi.errors', r.slice(-20)); } catch (e) {}
+};
+window.addEventListener('error', e => SY.noteError((e.message || 'error') + (e.filename ? ` (${String(e.filename).split('/').pop()}:${e.lineno})` : '')));
+window.addEventListener('unhandledrejection', e => { const r = e.reason; SY.noteError(r && typeof r === 'object' ? (r.message || r.code || JSON.stringify(r)) : String(r), 'promise'); });
+{ const ce = console.error.bind(console); console.error = (...a) => { try { SY.noteError(a.map(x => (x && x.message) || (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' '), 'console'); } catch (_) {} ce(...a); }; }
 function isoWeek(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dn = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - dn + 3);
@@ -88,6 +95,9 @@ const IC = {
   shield: '<path d="M8 1.8l5 1.9v4.1c0 3-2.1 5.3-5 6.4-2.9-1.1-5-3.4-5-6.4V3.7z"/><path d="M5.8 8.1l1.6 1.6 2.9-3.1"/>',
   term: '<rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6"/><path d="M4.4 6.2l2.2 1.8-2.2 1.8M8.4 10.2h3.2"/>',
   copy: '<rect x="5.2" y="5.2" width="8.4" height="8.4" rx="1.4"/><path d="M10.8 5.2V3.6c0-.6-.4-1.1-1-1.1H3.6c-.6 0-1.1.5-1.1 1.1v6.2c0 .6.5 1 1.1 1h1.6"/>',
+  search: '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4l3.6 3.6"/>',
+  hash: '<path d="M6.2 2.5L5 13.5M11 2.5L9.8 13.5M2.8 5.8h11M2.2 10.2h11"/>',
+  moon: '<path d="M13.4 9.6A5.6 5.6 0 0 1 6.4 2.6a5.6 5.6 0 1 0 7 7z"/>',
   wand: '<path d="M3 13l7.5-7.5M9.2 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5zM12.8 7l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4z"/>'
 };
 const icon = (n, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -271,7 +281,7 @@ function renderStatus() {
       <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
     </div>
-    <div style="line-height:1.7">${SY.keys('⌘K 快速记录 · ⌘1–⌘9 切换')}<br>Esc 关闭详情</div>
+    <div style="line-height:1.7">${SY.keys('⌘K 搜索 · ⌘N 记录 · ⌘1–⌘9 切换')}<br>Esc 关闭详情</div>
     ${SY.updateFootHtml ? SY.updateFootHtml() : ''}`;
 }
 function renderCapture() {
@@ -380,8 +390,8 @@ function del(col, id) {
   toast(`已删除${name}${extra.length ? '及 ' + extra.length + ' 个任务' : ''}`, { undo: () => { put(col, doc); extra.forEach(t => put('tasks', t)); depFix.forEach(([tid, deps]) => patch('tasks', tid, { deps })); } });
 }
 function setView(v) { S.ui.view = v; if (v !== 'project') S.ui.projectId = null; saveUI(); renderAll(); $('#view-wrap').scrollTop = 0; }
-function goProject(id, tab) { S.ui.view = 'project'; S.ui.projectId = id; if (tab) S.ui.ptab = tab; saveUI(); renderAll(); $('#view-wrap').scrollTop = 0; }
-function select(col, id) { S.sel = { col, id }; renderAll(); }
+function goProject(id, tab) { if (SY.noteOpened) SY.noteOpened('projects', id); S.ui.view = 'project'; S.ui.projectId = id; if (tab) S.ui.ptab = tab; saveUI(); renderAll(); $('#view-wrap').scrollTop = 0; }
+function select(col, id) { if (SY.noteOpened) SY.noteOpened(col, id); S.sel = { col, id }; renderAll(); }
 function closeInsp() { S.sel = null; renderAll(); }
 Object.assign(SY, { newTask, setStatus, newProject, del, setView, goProject, select, closeInsp });
 
@@ -554,6 +564,7 @@ async function openSettings() {
       <div class="seg" id="s-skin">${SKINS.map(([k, l]) => `<button type="button" class="${(S.ui.skin || 'clay') === k ? 'is-on' : ''}" data-act="skin" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="seg" id="s-theme">${[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([k, l]) => `<button type="button" class="${th === k ? 'is-on' : ''}" data-act="theme" data-v="${k}">${l}</button>`).join('')}</div>
     </div>
+    ${SY.prefsSection ? SY.prefsSection(st) : ''}
     <div class="set-sec"><h3>数据</h3>
       <p>所有数据保存在本机的一个数据库文件里，和应用本身分开放，更新或重装应用都不会动它。每天自动备份一份，保留最近 14 天；每次更新版本后第一次打开，还会额外完整备份一份。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}
@@ -565,7 +576,7 @@ async function openSettings() {
     </div>
     ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear', wide: true });
 }
@@ -769,7 +780,8 @@ document.addEventListener('keydown', e => {
     newTask({ title, projectId: pid && pid !== '_loose' && pid !== 'all' ? pid : null, status: st }); t.value = ''; return;
   }
   if (t.classList && t.classList.contains('insp-title') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); t.blur(); return; }
-  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); SY.focusCapture(); return; }
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (SY.openPalette) SY.openPalette(); return; }
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); if (!$('#modal').hidden) closeModal(); SY.focusCapture(); return; }
   if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
     e.preventDefault(); const all = NAV.flatMap(g => g[1]); const it = all[Number(e.key) - 1]; if (it) setView(it[0]); return;
   }

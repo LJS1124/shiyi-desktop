@@ -108,6 +108,15 @@ try:
         pg.evaluate("SY.S.ui.calMonth = SY.TODAY().slice(0, 7); SY.scheduleRender()")
         shot("calendar")
 
+        # ⌘K: one box for everything
+        view("today")
+        pg.wait_for_timeout(400)
+        pg.keyboard.press("Meta+k")
+        pg.wait_for_selector("#pal-q")
+        pg.keyboard.type("评测")
+        shot("palette", 400)
+        pg.keyboard.press("Escape")
+
         # capture an idea: related items are suggested without AI
         view("ideas", ideaFilter="inbox")
         pg.fill("#cap-text", "失败对话可以按工具调用逐步回放，方便定位评测里出错的步骤 #agent")

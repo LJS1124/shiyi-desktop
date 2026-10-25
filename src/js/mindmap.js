@@ -158,7 +158,12 @@ SY.views.mindmap = {
     if (fresh) { const r = wrap.getBoundingClientRect(); st.x = r.width / 2 - rp.x; st.y = r.height / 2 - rp.y; pz.apply(); }
     // keep selected node in view
     const se = els.get(selId), revealKey = m.id + '|' + selId;
-    if (se && !fresh && revealKey !== lastRevealed) {
+    if (se && centerNext === selId) {
+      // opened from search: put the node in the middle
+      const r = wrap.getBoundingClientRect();
+      st.x = r.width / 2 - (parseFloat(se.style.left) + se.offsetWidth / 2) * st.k; st.y = r.height / 2 - (parseFloat(se.style.top) + se.offsetHeight / 2) * st.k; pz.apply();
+      centerNext = null;
+    } else if (se && !fresh && revealKey !== lastRevealed) {
       const r = wrap.getBoundingClientRect(), nx = parseFloat(se.style.left) * st.k + st.x, ny = parseFloat(se.style.top) * st.k + st.y, nw = se.offsetWidth * st.k, nh = se.offsetHeight * st.k;
       let moved = false;
       if (nx < 20) { st.x += 20 - nx; moved = true; } else if (nx + nw > r.width - 20) { st.x -= nx + nw - r.width + 20; moved = true; }
@@ -299,7 +304,18 @@ function startEdit(id) {
   ta.addEventListener('blur', () => finish(true));
 }
 
-let lastRevealed = null;
+let lastRevealed = null, centerNext = null;
+/* open a map (from ⌘K) with a node selected and centred; folded branches above it open up */
+SY.mmFocus = (mapId, nodeId) => {
+  const m = S.data.maps.get(mapId); if (!m) return;
+  S.ui.mapId = mapId; SY.saveUI();
+  const N = m.nodes || {};
+  if (!nodeId || !N[nodeId]) { selId = m.rootId; centerNext = null; return; }
+  const folded = []; let x = N[N[nodeId].parent];
+  while (x) { if (x.collapsed) folded.push(x.id); x = N[x.parent]; }
+  if (folded.length) mutate(nodes => { folded.forEach(id => { if (nodes[id]) nodes[id].collapsed = false; }); }, { record: false });
+  selId = nodeId; centerNext = nodeId;
+};
 
 /* drag the outer edge of a node to set its width; double-click the edge for automatic width */
 function resizeDown(e, el, st) {

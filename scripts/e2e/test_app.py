@@ -22,6 +22,10 @@ def cli(*args, agent="claude"):
     return json.loads(out.stdout)
 
 
+def SY_view(pg):
+    return pg.evaluate("SY.S.ui.view")
+
+
 def check(cond, msg):
     print(("  ok   " if cond else "  FAIL ") + msg)
     if not cond:
@@ -136,6 +140,63 @@ try:
         check(pg.locator(".mp-card").count() == 12, "settings list the 12 model providers")
         check("使用中" in pg.inner_text("#mp-detail"), "the provider in use is selected")
         pg.screenshot(path=str(SHOTS / "e2e-settings.png"))
+
+        print("reminders, diagnostics, feedback")
+        pg.locator("#s-prefs").scroll_into_view_if_needed()
+        check(pg.locator("#pf-daily").is_checked(), "daily summary is on by default")
+        pg.select_option("#pf-time", "07:30"); pg.wait_for_timeout(300)
+        check(pg.evaluate("SY.invoke('get_settings')")["prefs"]["dailyTime"] == "07:30", "summary time is saved")
+        pg.uncheck("#pf-daily"); pg.wait_for_timeout(300)
+        check(pg.evaluate("SY.invoke('get_settings')")["prefs"]["dailySummary"] is False and pg.locator("#pf-time").is_disabled(), "summary can be turned off")
+        pg.check("#pf-daily"); pg.wait_for_timeout(300)
+        pg.click('[data-act="pf-test"]'); pg.wait_for_timeout(300)
+        check(pg.evaluate("SY.invoke('e2e_state')")["notified"] == 1 and "已发送" in pg.inner_text("#pf-out"), "test notification is sent")
+        pg.evaluate("SY.noteError('e2e 测试报错', 'test')")
+        pg.click('#s-about [data-act="diag-open"]'); pg.wait_for_selector("#diag-text")
+        diag = pg.inner_text("#diag-text")
+        check("v1.4.0" in diag and "任务 " in diag and "e2e 测试报错" in diag, "diagnostics list version, counts and recent errors")
+        check("sk-test" not in diag and "失败轨迹回放面板" not in diag, "diagnostics hold no key and no note contents")
+        pg.click('#m-foot [data-act="feedback"]'); pg.wait_for_selector("#fb-title")
+        pg.fill("#fb-title", "导图节点拖不动"); pg.fill("#fb-body", "拖到另一个分支后弹回原位")
+        pg.click('[data-act="feedback-go"]'); pg.wait_for_timeout(500)
+        fb = pg.evaluate("SY.invoke('e2e_state')")["feedback"]
+        check(fb and fb["title"] == "导图节点拖不动" and "弹回原位" in fb["body"] and "诊断信息" in fb["body"], "feedback opens a GitHub issue with the diagnostics")
+        check(pg.locator("#modal").is_hidden(), "feedback dialog closes")
+
+        print("⌘K search and commands")
+        pg.keyboard.press("Control+k"); pg.wait_for_selector("#pal-q")
+        pg.keyboard.type("打分"); pg.wait_for_timeout(150)
+        check("写 trajectory 打分脚本" in pg.locator(".pal-row").first.inner_text(), "title matches come first")
+        pg.keyboard.press("Enter"); pg.wait_for_timeout(300)
+        check(pg.evaluate("SY.S.sel && SY.S.sel.id") == "task_s-a4" and pg.locator("#pal").count() == 0, "Enter opens the task and closes the box")
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(100)
+        pg.keyboard.press("Control+k"); pg.wait_for_selector("#pal-q")
+        check("写 trajectory 打分脚本" in pg.inner_text("#pal-list"), "recently opened shows with an empty box")
+        pg.keyboard.type("标注口径"); pg.wait_for_timeout(150)
+        row = pg.locator('.pal-row[data-k="task"]').first
+        check("给样本标注期望的工具调用序列" in row.inner_text() and row.locator(".pal-s mark").count() > 0, "a note match shows where it matched")
+        pg.fill("#pal-q", "MCP"); pg.wait_for_timeout(150); pg.keyboard.press("Enter"); pg.wait_for_timeout(600)
+        node = pg.evaluate("(() => { const m = SY.S.data.maps.get(SY.S.ui.mapId); return m && m.nodes[SY.mmSel()] && m.nodes[SY.mmSel()].text; })()")
+        check(SY_view(pg) == "mindmap" and node == "MCP 连接器", "a mind-map node opens selected in its map")
+        pg.keyboard.press("Control+k"); pg.fill("#pal-q", "深色"); pg.wait_for_timeout(150); pg.keyboard.press("Enter"); pg.wait_for_timeout(200)
+        check(pg.evaluate("SY.S.ui.theme") == "dark", "commands run from the box")
+        pg.evaluate("SY.S.ui.theme = 'system'; SY.saveUI(); SY.applyTheme()")
+        pg.keyboard.press("Control+k"); pg.fill("#pal-q", "下周去湖边爬山"); pg.wait_for_timeout(150)
+        check(pg.locator(".pal-row").first.get_attribute("data-k") == "new", "no match offers to write it down")
+        pg.keyboard.press("Enter"); pg.wait_for_timeout(800)
+        check(cli("search", "下周去湖边爬山")["total"] == 1, "…and Enter saves it as an idea")
+        pg.keyboard.press("Control+k"); pg.wait_for_selector("#pal-q"); pg.keyboard.press("Escape"); pg.wait_for_timeout(100)
+        check(pg.locator("#pal").count() == 0, "Esc closes the box")
+        pg.keyboard.press("Control+n"); pg.wait_for_timeout(100)
+        check(pg.evaluate("document.activeElement.id") == "cap-text", "⌘N focuses the capture box")
+        pg.evaluate("document.activeElement.blur()")
+        # 3000 extra items, kept in memory only
+        pg.evaluate("""(() => { for (let i = 0; i < 3000; i++) SY.S.data.tasks.set('perf' + i, { id: 'perf' + i, title: '压力测试任务 ' + i + ' 评测 导图', note: '第 ' + i + ' 条备注', status: i % 3 ? 'todo' : 'done', deps: [], createdAt: Date.now(), updatedAt: Date.now() }); SY.S.rev++; })()""")
+        pg.keyboard.press("Control+k"); pg.wait_for_selector("#pal-q")
+        ms = pg.evaluate("(() => { const i = document.getElementById('pal-q'); const t0 = performance.now(); for (const q of ['压', '压力', '压力 评测', '第 2999']) { i.value = q; i.dispatchEvent(new Event('input')); } return performance.now() - t0; })()")
+        check(ms < 400 and pg.locator(".pal-row").count() > 0, f"search over 3000 more items stays fast (4 searches + redraws: {ms:.0f} ms)")
+        pg.keyboard.press("Escape")
+        pg.evaluate("(() => { for (let i = 0; i < 3000; i++) SY.S.data.tasks.delete('perf' + i); SY.S.rev++; SY.closeInsp(); })()")
 
         print("calendar")
         pg.evaluate("SY.closeModal(); SY.S.ui.calMonth = SY.TODAY().slice(0, 7); SY.setView('calendar')")

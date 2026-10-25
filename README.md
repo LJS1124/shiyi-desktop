@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.3.0-0A84FF" alt="1.3.0">
+  <img src="https://img.shields.io/badge/version-1.4.0-0A84FF" alt="1.4.0">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -23,6 +23,8 @@
 ## 亮点
 
 - **随手记，不打断手头的事**：在任何应用里按 <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd>（Windows 上是 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>）唤出记录框；`#标签` 自动归类，`[[标题]]` 双链到别的条目。记下的时候会提示「可能和哪条相关」，这一步只比较文字，不调用 AI。
+- **<kbd>⌘</kbd><kbd>K</kbd> 找到一切**：一个框里搜灵感、任务、项目、导图节点和标签，也能直接跳到某个视图、新建项目、切换深浅色；搜不到就回车记下来。
+- **到点提醒，不漏事**：每天早上一条系统通知，告诉你今天要做几件、有没有逾期。Windows 上关闭窗口会缩到托盘继续运行，也可以开机自动启动。
 - **一个项目，六种视图**：看板、日历、甘特图、燃尽图、网络图（PERT）、思维导图，用的是同一份任务数据。日历里多天的任务横跨显示，拖动改日期，双击某一天直接加任务，没排期的任务从侧栏拖上去就排好了。依赖、三点估算和关键路径在各个视图之间是连通的。
 - **知识图谱**：手动关联、AI 建议、`[[双链]]`、相同标签、项目归属和依赖，都画在一张图上。可以只看某一条周围的局部关系，也可以拖线建立关联。
 - **AI 原生，但由你掌控**：外部 AI 助手通过命令行读写；内置的 AI 功能只在你点按钮时运行，结果先预览、改完再写入。AI 建的关联必须等你确认才算数，每一批修改都可以撤销。
@@ -30,6 +32,12 @@
 - **macOS 和 Windows，一键更新**：有新版本时侧栏会提示，点「立即更新」就自动下载、核对签名、安装并重启；更新前先完整备份数据库。
 
 ## 看看它
+
+### ⌘K 搜索与命令
+
+在任何界面按 <kbd>⌘</kbd><kbd>K</kbd>（Windows 上是 <kbd>Ctrl</kbd><kbd>K</kbd>）。多个关键词要同时命中；标题命中的排在前面，只有备注命中时显示命中的那一段。导图里的每个节点都能搜到，回车后在导图里选中并居中。不输入时列出最近打开的内容和常用命令，搜不到时回车直接记成灵感。
+
+![⌘K 搜索](docs/screenshots/palette.png)
 
 ### 知识图谱
 
@@ -172,11 +180,22 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 
 | 按键 | 作用 |
 | --- | --- |
-| <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框。macOS 上关闭窗口后应用仍在后台，<kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出；Windows 上关闭窗口就是退出，要用这个快捷键得保持应用运行 |
-| <kbd>⌘</kbd><kbd>K</kbd> | 聚焦记录框；以 `/t ` 开头直接记成任务 |
+| <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框。关闭窗口后拾忆仍在后台运行：macOS 上 <kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出，Windows 上它在托盘里，右键菜单可以退出 |
+| <kbd>⌘</kbd><kbd>K</kbd> | 搜索和命令 |
+| <kbd>⌘</kbd><kbd>N</kbd> 或 <kbd>/</kbd> | 聚焦记录框；以 `/t ` 开头直接记成任务 |
 | <kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd> | 切换视图 |
 | `[[` | 在记录框和备注里弹出条目列表，选中即插入双链 |
 | <kbd>Esc</kbd> | 关闭详情 |
+
+## 提醒与后台运行
+
+- **今日摘要**：每天到点（默认 9:00）发一条系统通知，列出今天要做的和已经逾期的任务；都没有时不打扰。错过了时间（比如 10 点才开电脑）会在打开时补发，晚上 9 点以后不再补发。在「设置 → 提醒与后台」里可以关闭、改时间，或点「发一条试试」。没收到通知的话，到系统的通知设置里允许 Shiyi 发通知。
+- **后台运行**：提醒只在拾忆运行时才会发。macOS 上关闭窗口后应用仍在后台；Windows 上关闭窗口会缩到任务栏右下角的托盘里（可以在设置里改成关闭即退出）。重复打开拾忆会回到已经在运行的窗口。
+- **开机自动启动**：macOS 和 Windows 都支持，默认关闭。开启后开机时在后台启动，不弹出窗口。
+
+## 反馈问题
+
+「设置 → 关于 → 反馈问题」（或 <kbd>⌘</kbd><kbd>K</kbd> 里搜「反馈」）会在浏览器里打开 [GitHub Issues](https://github.com/LJS1124/shiyi-desktop/issues) 的新建页面，把你写的描述和诊断信息填好，登录 GitHub 后提交即可。诊断信息包括版本、系统、数据条数、最近的报错和后台日志，不含任何笔记内容和 API Key；提交前可以先点「诊断信息」看一遍。
 
 ## 数据
 
@@ -185,6 +204,7 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 - **导出 / 导入**：「设置 → 数据」可以导出、导入 JSON。网页预览导出的备份和旧版备份都能导入，导入本身也能撤销。
 - **从旧版升级**：升级时会自动把旧的 `data.json` 导入数据库，原文件改名为 `data.json.imported`。
 - **API Key**：存在同目录的 `settings.json` 里，不会离开本机（macOS 上文件权限是 600）。
+- **日志**：同目录的 `logs/shiyi.log`，只记启动、备份、AI 和更新请求失败的原因，不记笔记内容、提示词和 Key，「诊断信息」里显示最后 20 行。
 
 ## 架构
 
@@ -242,8 +262,10 @@ core/                 数据层（Rust）：SQLite、操作与撤销、知识图
   src/cli.rs          命令行
   src/install.rs      命令行启动脚本（sh / cmd）、home 目录、PATH 提示
   src/ai.rs           读取各家模型的回复（思考块、流式、截断）与输出额度调整
-  src/update.rs       检查 GitHub 上的新版本
-  tests/              数据层、命令行、相关推荐、修改摘要、AI 回复、更新与升级备份的测试
+  src/update.rs       检查 GitHub 上的新版本、反馈问题的链接
+  src/remind.rs       每日摘要：什么时候发、通知里写什么
+  src/logfile.rs      诊断用的滚动日志
+  tests/              数据层、命令行、相关推荐、修改摘要、AI 回复、更新与升级备份、提醒与日志的测试
 skills/shiyi/         给 AI 的技能说明（SKILL.md，也编进了应用）
 src/                  界面（无构建步骤）
   js/core.js          状态、渲染循环、详情面板、设置
@@ -252,9 +274,11 @@ src/                  界面（无构建步骤）
   js/related.js       可能相关（与 core/src/related.rs 一致）
   js/agent.js         操作记录、AI 接入设置
   js/update.js        版本号与 GitHub 链接、新版本提示、一键更新
+  js/palette.js       ⌘K 搜索与命令
+  js/system.js        提醒与后台设置、诊断信息、反馈问题
   js/views-main.js    今日 / 灵感 / 项目
   js/kanban.js  calendar.js  gantt.js  burndown.js  pert.js  mindmap.js  ai.js
-src-tauri/            Rust 外壳：接入 core、监听 AI 的修改、安装命令行和技能、AI 代理、导入导出、全局快捷键、自动更新
+src-tauri/            Rust 外壳：接入 core、监听 AI 的修改、安装命令行和技能、AI 代理、导入导出、全局快捷键、自动更新、通知、托盘、开机自启
   tauri.conf.json     macOS 的窗口和打包配置
   tauri.windows.conf.json  Windows 的覆盖配置（系统标题栏、NSIS 安装包）
 scripts/              预览打包、端到端测试、截图

@@ -57,6 +57,8 @@ jobs:
         run: |
           # one annotation per error block, so multi-line errors (dependency resolution) stay readable
           awk '/^(error|warning)(\[|:)/{if(b)print b; b=$0; n=0; next} b&&n<14{b=b"%0A"$0; n++} END{if(b)print b}' check.log | head -20 | sed 's/^/::error::/' || true
+          # --message-format short puts the file first: "src/lib.rs:1:2: error[E0425]: …"
+          grep -E "^[^ ]+:[0-9]+:[0-9]+: (error|warning)" check.log | head -20 | sed 's/^/::error::/' || true
 
   windows:
     # core tests and a compile check of the desktop shell with the Windows-only code
@@ -78,7 +80,13 @@ jobs:
         run: cargo test --color never
       - name: cargo check (desktop app)
         working-directory: src-tauri
-        run: cargo check --color never --message-format short
+        run: |
+          set -o pipefail
+          cargo check --color never --message-format short 2>&1 | tee ../check.log
+      - name: Show errors as annotations
+        if: failure()
+        run: |
+          grep -E "^[^ ]+:[0-9]+:[0-9]+: (error|warning)|^error" check.log | head -20 | sed 's/^/::error::/' || true
 
   gui-e2e:
     # the real GUI in Chromium against a real database, with the CLI acting as an AI agent

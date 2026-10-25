@@ -39,6 +39,7 @@ proc = None
 if not args.preview:
     proc = subprocess.Popen([args.bridge, args.db], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
 
+PREFS = {"dailySummary": True, "dailyTime": "09:00", "closeToTray": True, "autostart": False, "tray": False, "canAutostart": True}
 FAKE = {"provider": "deepseek", "providers": {"deepseek": {"apiFormat": "anthropic", "apiBase": "https://api.deepseek.com/anthropic", "model": "deepseek-flash", "quickModel": "deepseek-flash", "key": "sk-test-0000a1b2"}}}
 
 def call(cmd, a):
@@ -52,7 +53,7 @@ def call(cmd, a):
         for v in provs.values(): v.pop("key", None)
         a = FAKE["providers"].get(FAKE["provider"], {})
         return {"ok": {"apiFormat": a.get("apiFormat", "anthropic"), "apiBase": a.get("apiBase", ""), "model": a.get("model", ""), "quickModel": a.get("quickModel", ""),
-                       "hasKey": bool(a.get("key")), "dataPath": args.db, "provider": FAKE["provider"], "providers": provs, "catalog": FAKE["catalog"]}}
+                       "hasKey": bool(a.get("key")), "dataPath": args.db, "provider": FAKE["provider"], "providers": provs, "catalog": FAKE["catalog"], "prefs": PREFS}}
     if cmd == "save_settings":
         return {"ok": None}
     if cmd == "save_provider":
@@ -65,20 +66,38 @@ def call(cmd, a):
         return {"ok": ["deepseek-chat", "deepseek-reasoner"] if a["provider"] == "deepseek" else ["model-a", "model-b", "model-c"]}
     if cmd == "open_external":
         FAKE["opened"] = a["url"]; return {"ok": None}
+    if cmd == "save_prefs":
+        for k, v in a["prefs"].items():
+            if v is not None: PREFS[k] = v
+        if not __import__("re").match(r"^\d{1,2}:\d{2}$", PREFS["dailyTime"]): return {"err": "时间的格式是 09:00 这样"}
+        return {"ok": PREFS}
+    if cmd == "notify_test":
+        FAKE["notified"] = FAKE.get("notified", 0) + 1
+        return {"ok": "今天要做 3 件，逾期 1 件"}
+    if cmd == "diagnostics":
+        st = call("core_query", {"q": {"q": "status"}}).get("ok", {})
+        return {"ok": {"version": "1.4.0", "os": "macos", "arch": "aarch64", "osVersion": "15.1", "counts": st.get("counts", {}), "permission": st.get("agent_permission"),
+                       "dbBytes": 1_350_000, "dbError": None, "lastBackup": "2026-10-25", "provider": FAKE["provider"], "hasKey": True, "format": "anthropic",
+                       "model": "deepseek-flash", "quickModel": "deepseek-flash", "cli": True, "skill": True, "skillCurrent": True, "autoUpdate": True, "prefs": PREFS,
+                       "log": ["2026-10-25T09:00:01+08:00 启动 v1.4.0（macos/aarch64）", "2026-10-25T10:12:40+08:00 AI 调用失败（deepseek）：HTTP 401：invalid api key"]}}
+    if cmd == "open_feedback":
+        FAKE["feedback"] = a; return {"ok": None}
+    if cmd == "e2e_state":
+        return {"ok": {k: FAKE.get(k) for k in ("notified", "feedback", "opened")}}
     if cmd == "ai_complete":
         return {"ok": "你好"}
     if cmd == "app_info":
         import os
-        return {"ok": {"version": "1.3.0", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
+        return {"ok": {"version": "1.4.0", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
     if cmd == "check_update":
         # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
         import os
         if os.environ.get("SHIYI_FAKE_UPDATE") == "none":
-            return {"ok": {"available": False, "current": "1.3.0", "version": "1.3.0", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
+            return {"ok": {"available": False, "current": "1.4.0", "version": "1.4.0", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
         notes = (ROOT / "docs/releases/v1.1.1.md").read_text(encoding="utf-8")
-        return {"ok": {"available": True, "current": "1.3.0", "version": "1.3.0", "tag": "v1.3.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
-                       "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.3.0", "asset_name": "Shiyi_1.3.0_universal.dmg",
-                       "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.3.0/Shiyi_1.3.0_universal.dmg"}}
+        return {"ok": {"available": True, "current": "1.4.0", "version": "1.4.0", "tag": "v1.4.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
+                       "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.4.0", "asset_name": "Shiyi_1.4.0_universal.dmg",
+                       "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.4.0/Shiyi_1.4.0_universal.dmg"}}
     if cmd == "update_install":
         return {"err": "检查更新失败：模拟环境不能安装"}
     if cmd == "open_project_url":

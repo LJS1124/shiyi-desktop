@@ -185,6 +185,7 @@ async function copy(text) {
     let ok = false; try { ok = document.execCommand('copy'); } catch (_) {} ta.remove(); return ok;
   }
 }
+SY.copyText = copy;
 document.addEventListener('input', e => { if (e.target.id === 'op-q') { V.q = e.target.value; if (!e.isComposing) SY.scheduleRender(); } });
 document.addEventListener('compositionend', e => { if (e.target.id === 'op-q') { V.q = e.target.value; SY.scheduleRender(); } });
 Object.assign(SY.acts, {
