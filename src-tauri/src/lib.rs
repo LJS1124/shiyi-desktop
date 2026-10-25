@@ -405,6 +405,7 @@ fn get_settings(app: AppHandle, store: State<'_, Store>) -> Result<PublicSetting
             }))
         })
         .collect();
+    let prefs = prefs_json(&s);
     Ok(PublicSettings {
         has_key: !s.api_key.trim().is_empty(),
         api_format: s.api_format,
@@ -415,7 +416,7 @@ fn get_settings(app: AppHandle, store: State<'_, Store>) -> Result<PublicSetting
         provider: s.provider,
         providers: Value::Object(providers),
         catalog: shiyi_core::providers::catalog_json(),
-        prefs: prefs_json(&s),
+        prefs,
     })
 }
 
