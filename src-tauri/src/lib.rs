@@ -1,7 +1,8 @@
 //! 拾忆 desktop backend: the shiyi-core SQLite store (shared with the `shiyi`
 //! CLI that AI agents use), a watcher that tells the window when an agent
 //! changed something, settings, the AI proxy, import/export dialogs, CLI and
-//! skill installers, and the global quick-capture shortcut.
+//! skill installers, the global quick-capture shortcut, the daily summary
+//! notification, the Windows tray, launch at login and a small diagnostics log.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -10,7 +11,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI64, Ordering},
         Mutex,
     },
     time::Duration,
@@ -19,6 +20,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 static QUITTING: AtomicBool = AtomicBool::new(false);
+/// local UTC offset for log timestamps (taken from the database clock at start)
+static LOG_OFFSET: AtomicI64 = AtomicI64::new(0);
 const KEEP_BACKUPS: usize = 14;
 
 struct Store {
@@ -41,6 +44,13 @@ struct Settings {
     provider: String,
     /// every provider the user has set up, so switching keeps their keys
     providers: std::collections::BTreeMap<String, ProviderCfg>,
+    /// the morning summary notification and when it comes ("HH:MM")
+    daily_summary: bool,
+    daily_time: String,
+    /// Windows: closing the window keeps 拾忆 running in the tray
+    close_to_tray: bool,
+    /// start at login (without showing the window)
+    autostart: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -97,6 +107,10 @@ impl Default for Settings {
             quick_model: "claude-haiku-5-5".into(),
             provider: String::new(),
             providers: Default::default(),
+            daily_summary: true,
+            daily_time: shiyi_core::remind::DEFAULT_TIME.into(),
+            close_to_tray: true,
+            autostart: false,
         }
     }
 }
@@ -114,6 +128,19 @@ struct PublicSettings {
     /// per provider: format, address, models, whether a key is saved and its masked form
     providers: Value,
     catalog: Value,
+    /// reminders and background running
+    prefs: Value,
+}
+
+fn prefs_json(s: &Settings) -> Value {
+    json!({
+        "dailySummary": s.daily_summary,
+        "dailyTime": shiyi_core::remind::normalize_hhmm(&s.daily_time),
+        "closeToTray": s.close_to_tray,
+        "autostart": s.autostart,
+        "tray": cfg!(windows),
+        "canAutostart": cfg!(any(target_os = "macos", windows))
+    })
 }
 
 fn write_settings(app: &AppHandle, s: &Settings) -> Result<(), String> {
@@ -388,6 +415,7 @@ fn get_settings(app: AppHandle, store: State<'_, Store>) -> Result<PublicSetting
         provider: s.provider,
         providers: Value::Object(providers),
         catalog: shiyi_core::providers::catalog_json(),
+        prefs: prefs_json(&s),
     })
 }
 
@@ -456,12 +484,8 @@ async fn list_models(app: AppHandle, provider: String) -> Result<Vec<String>, St
     Ok(models)
 }
 
-/// Opens a provider's key page in the browser (allowlisted hosts only).
-#[tauri::command]
-fn open_external(url: String) -> Result<(), String> {
-    if !shiyi_core::providers::is_allowed_external(&url) {
-        return Err("只能打开模型服务商的官方页面".into());
-    }
+/// Opens a link in the default browser. Callers check the link first.
+fn open_in_browser(url: &str) -> Result<(), String> {
     let mut cmd = if cfg!(target_os = "macos") {
         std::process::Command::new("open")
     } else if cfg!(windows) {
@@ -469,8 +493,17 @@ fn open_external(url: String) -> Result<(), String> {
     } else {
         std::process::Command::new("xdg-open")
     };
-    cmd.arg(&url).spawn().map_err(|e| e.to_string())?;
+    cmd.arg(url).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Opens a provider's key page in the browser (allowlisted hosts only).
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !shiyi_core::providers::is_allowed_external(&url) {
+        return Err("只能打开模型服务商的官方页面".into());
+    }
+    open_in_browser(&url)
 }
 
 #[tauri::command]
@@ -483,6 +516,7 @@ fn save_settings(app: AppHandle, settings: Settings, keep_key: bool) -> Result<(
     }
     s.providers = cur.providers;
     s.provider = if s.provider.is_empty() { cur.provider } else { s.provider };
+    (s.daily_summary, s.daily_time, s.close_to_tray, s.autostart) = (cur.daily_summary, cur.daily_time, cur.close_to_tray, cur.autostart);
     s.providers.insert(
         s.provider.clone(),
         ProviderCfg { api_format: s.api_format.clone(), api_base: s.api_base.clone(), api_key: s.api_key.clone(), model: s.model.clone(), quick_model: s.quick_model.clone() },
@@ -512,7 +546,18 @@ fn api_err(status: reqwest::StatusCode, v: &Value) -> String {
 
 #[tauri::command]
 async fn ai_complete(app: AppHandle, prompt: String, quick: bool, provider: Option<String>) -> Result<String, String> {
-    let mut s = read_settings(&app);
+    let r = ai_complete_inner(&app, prompt, quick, provider.clone()).await;
+    if let Err(e) = &r {
+        if e != "NO_KEY" {
+            let who = provider.unwrap_or_else(|| read_settings(&app).provider);
+            applog(&app, &format!("AI 调用失败（{who}）：{}", e.chars().take(160).collect::<String>()));
+        }
+    }
+    r
+}
+
+async fn ai_complete_inner(app: &AppHandle, prompt: String, quick: bool, provider: Option<String>) -> Result<String, String> {
+    let mut s = read_settings(app);
     // "测试连接" on a provider that isn't the one in use
     if let Some(id) = provider.filter(|id| s.providers.contains_key(id)) {
         s.activate(&id);
@@ -597,7 +642,15 @@ async fn ai_complete(app: AppHandle, prompt: String, quick: bool, provider: Opti
 /// Asks GitHub for the latest release. Never fails loudly: no network just
 /// means no update is shown.
 #[tauri::command]
-async fn check_update() -> Result<Value, String> {
+async fn check_update(app: AppHandle) -> Result<Value, String> {
+    let r = check_update_inner().await;
+    if let Err(e) = &r {
+        applog(&app, &format!("检查更新失败：{e}"));
+    }
+    r
+}
+
+async fn check_update_inner() -> Result<Value, String> {
     use shiyi_core::update as up;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
@@ -643,15 +696,7 @@ fn open_project_url(url: String) -> Result<(), String> {
     if !shiyi_core::update::is_project_url(&url) {
         return Err("只能打开拾忆的 GitHub 页面".into());
     }
-    let mut cmd = if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
-    } else if cfg!(windows) {
-        std::process::Command::new("explorer")
-    } else {
-        std::process::Command::new("xdg-open")
-    };
-    cmd.arg(&url).spawn().map_err(|e| e.to_string())?;
-    Ok(())
+    open_in_browser(&url)
 }
 
 /// The updater's public key from tauri.conf.json; empty until signing is set up,
@@ -688,7 +733,11 @@ async fn update_install(app: AppHandle) -> Result<(), String> {
             || {},
         )
         .await
-        .map_err(|e| format!("下载或安装失败：{e}"))?;
+        .map_err(|e| {
+            let m = format!("下载或安装失败：{e}");
+            applog(&app, &m);
+            m
+        })?;
     app.restart();
 }
 
@@ -703,6 +752,230 @@ fn app_info(app: AppHandle, store: State<'_, Store>) -> Value {
         "os": if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" },
         "auto_update": !updater_pubkey(&app).is_empty() && !cfg!(target_os = "linux")
     })
+}
+
+// ---------- reminders, background running, diagnostics ----------
+
+fn log_path(app: &AppHandle) -> Option<PathBuf> {
+    data_dir(app).ok().map(|d| d.join("logs").join("shiyi.log"))
+}
+
+/// One line in the diagnostics log (also on stderr for `tauri dev`). Never
+/// pass note contents, prompts or keys.
+fn applog(app: &AppHandle, msg: &str) {
+    eprintln!("拾忆: {msg}");
+    if let Some(p) = log_path(app) {
+        let ts = shiyi_core::time::iso_from_ms(shiyi_core::time::now_ms(), LOG_OFFSET.load(Ordering::Relaxed));
+        let _ = shiyi_core::logfile::append(&p, &format!("{ts} {msg}"), shiyi_core::logfile::MAX_BYTES);
+    }
+}
+
+fn notify(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrefsInput {
+    daily_summary: Option<bool>,
+    daily_time: Option<String>,
+    close_to_tray: Option<bool>,
+    autostart: Option<bool>,
+}
+
+/// Saves the reminder / background settings that were sent; returns them all.
+#[tauri::command]
+fn save_prefs(app: AppHandle, prefs: PrefsInput) -> Result<Value, String> {
+    let mut s = read_settings(&app);
+    if let Some(v) = prefs.daily_summary {
+        s.daily_summary = v;
+    }
+    if let Some(t) = prefs.daily_time {
+        if shiyi_core::remind::parse_hhmm(&t).is_none() {
+            return Err("时间的格式是 09:00 这样".into());
+        }
+        s.daily_time = shiyi_core::remind::normalize_hhmm(&t);
+    }
+    if let Some(v) = prefs.close_to_tray {
+        s.close_to_tray = v;
+    }
+    if let Some(v) = prefs.autostart {
+        set_autostart(&app, v)?;
+        s.autostart = v;
+    }
+    write_settings(&app, &s)?;
+    Ok(prefs_json(&s))
+}
+
+fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    if !cfg!(any(target_os = "macos", windows)) {
+        return Err("这个系统还不支持开机自启动".into());
+    }
+    if on && cfg!(target_os = "macos") {
+        let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+        if exe.contains("/AppTranslocation/") || exe.contains("/Volumes/") {
+            return Err("先把拾忆拖进「应用程序」文件夹并从那里打开，再开启开机自启动。".into());
+        }
+    }
+    let al = app.autolaunch();
+    let r = if on {
+        al.enable()
+    } else if al.is_enabled().unwrap_or(true) {
+        al.disable()
+    } else {
+        Ok(())
+    };
+    r.map_err(|e| {
+        let m = format!("设置开机自启动失败：{e}");
+        applog(app, &m);
+        m
+    })
+}
+
+/// "发一条试试": today's summary right now (or a short note when there is nothing due).
+#[tauri::command]
+fn notify_test(app: AppHandle, store: State<'_, Store>) -> Result<String, String> {
+    let today = with_core(&store, |c| c.query(json!({ "q": "today" }))).map_err(|e| e["message"].as_str().unwrap_or("读取数据失败").to_string())?;
+    let (title, body) = shiyi_core::remind::daily_message(&today).unwrap_or_else(|| ("拾忆".into(), "通知正常。今天没有到期或逾期的任务。".into()));
+    notify(&app, &title, &body).map_err(|e| {
+        applog(&app, &format!("通知发送失败：{e}"));
+        format!("通知没有发出去：{e}")
+    })?;
+    Ok(body)
+}
+
+/// Every 30 s: once a day at the chosen time, the summary notification. The
+/// date it was shown is kept in the database, so restarts don't repeat it.
+fn spawn_reminder(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(30));
+        let s = read_settings(&app);
+        if !s.daily_summary {
+            continue;
+        }
+        let msg = {
+            let store = app.state::<Store>();
+            let Ok(guard) = store.core.lock() else { continue };
+            let Some(c) = guard.as_ref() else { continue };
+            let clock = c.clock();
+            let now = shiyi_core::remind::minutes_of_day(clock.now_ms, clock.offset_s);
+            let today = clock.today();
+            let last = c.meta_get(shiyi_core::remind::META_LAST).ok().flatten();
+            if !shiyi_core::remind::is_due(now, &s.daily_time, &today, last.as_deref()) {
+                continue;
+            }
+            let _ = c.set_meta(shiyi_core::remind::META_LAST, &today);
+            c.query(json!({ "q": "today" })).ok().and_then(|v| shiyi_core::remind::daily_message(&v))
+        };
+        if let Some((title, body)) = msg {
+            if let Err(e) = notify(&app, &title, &body) {
+                applog(&app, &format!("通知发送失败：{e}"));
+            }
+        }
+    });
+}
+
+/// Windows: an icon in the notification area; left click opens the window.
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let open = MenuItem::with_id(app, "open", "打开拾忆", true, None::<&str>)?;
+    let capture = MenuItem::with_id(app, "capture", "快速记录", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "退出拾忆", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &capture, &sep, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main")
+        .tooltip("拾忆")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id.as_ref() {
+            "open" => show_main(app),
+            "capture" => {
+                show_main(app);
+                let _ = app.emit("quick-capture", ());
+            }
+            "quit" => {
+                QUITTING.store(true, Ordering::SeqCst);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                show_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
+/// The first time the window goes to the tray, say where it went.
+fn tray_hint_once(app: &AppHandle) {
+    let store = app.state::<Store>();
+    let first = with_core(&store, |c| {
+        let seen = c.meta_get("tray_hint_shown")?.is_some();
+        if !seen {
+            c.set_meta("tray_hint_shown", "1")?;
+        }
+        Ok(!seen)
+    })
+    .unwrap_or(false);
+    if first {
+        let _ = notify(app, "拾忆还在后台运行", "提醒和全局快捷键照常工作。点任务栏右下角的拾忆图标打开，右键菜单里可以退出。");
+    }
+}
+
+/// What "复制诊断信息" shows: versions, counts and settings, never note
+/// contents or keys.
+#[tauri::command]
+fn diagnostics(app: AppHandle, store: State<'_, Store>) -> Value {
+    let s = read_settings(&app);
+    let status = with_core(&store, |c| c.query(json!({ "q": "status" }))).unwrap_or_else(|e| json!({ "error": e }));
+    let os_version = if cfg!(target_os = "macos") {
+        std::process::Command::new("sw_vers").arg("-productVersion").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let cli = cli_targets().into_iter().any(|p| fs::read_to_string(p).map(|t| is_our_cli(&t)).unwrap_or(false));
+    let skill = skill_path();
+    let backups = store.path.parent().map(|p| p.join("backups"));
+    let last_backup = backups
+        .and_then(|d| fs::read_dir(d).ok())
+        .map(|it| it.filter_map(|e| e.ok()).filter_map(|e| e.file_name().into_string().ok()).filter(|n| n.ends_with(".db")).max())
+        .unwrap_or_default();
+    json!({
+        "version": shiyi_core::VERSION,
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "osVersion": os_version,
+        "counts": status["counts"],
+        "permission": status["agent_permission"],
+        "dbBytes": fs::metadata(&store.path).map(|m| m.len()).unwrap_or(0),
+        "dbError": store.error,
+        "lastBackup": last_backup,
+        "provider": s.provider,
+        "hasKey": !s.api_key.trim().is_empty(),
+        "format": s.api_format,
+        "model": s.model,
+        "quickModel": s.quick_model,
+        "cli": cli,
+        "skill": skill.exists(),
+        "skillCurrent": fs::read_to_string(&skill).map(|t| t == shiyi_core::SKILL_MD).unwrap_or(false),
+        "autoUpdate": !updater_pubkey(&app).is_empty(),
+        "prefs": prefs_json(&s),
+        "log": log_path(&app).map(|p| shiyi_core::logfile::tail(&p, 20)).unwrap_or_default()
+    })
+}
+
+/// Opens "New issue" on GitHub with the title and text filled in.
+#[tauri::command]
+fn open_feedback(title: String, body: String) -> Result<(), String> {
+    open_in_browser(&shiyi_core::update::issue_url(&title, &body))
 }
 
 // ---------- app ----------
@@ -742,24 +1015,29 @@ fn open_store(app: &AppHandle) -> Store {
     match Core::open(&path) {
         Ok(mut core) => {
             // before anything else touches the database after an update
+            LOG_OFFSET.store(core.clock().offset_s, Ordering::Relaxed);
+            applog(app, &format!("启动 v{}（{}/{}）", shiyi_core::VERSION, std::env::consts::OS, std::env::consts::ARCH));
             match core.backup_on_upgrade(shiyi_core::VERSION) {
-                Ok(Some(p)) => eprintln!("拾忆: backup before upgrade at {}", p.display()),
+                Ok(Some(p)) => applog(app, &format!("升级前备份：{}", p.display())),
                 Ok(None) => {}
-                Err(e) => eprintln!("拾忆: upgrade backup failed: {e}"),
+                Err(e) => applog(app, &format!("升级前备份失败：{e}")),
             }
             if let Ok(dir) = data_dir(app) {
                 match core.import_legacy_file_once(&dir.join("data.json")) {
-                    Ok(Some(r)) => eprintln!("拾忆: imported data.json ({} items)", r["imported"]),
+                    Ok(Some(r)) => applog(app, &format!("导入旧版 data.json：{} 条", r["imported"])),
                     Ok(None) => {}
-                    Err(e) => eprintln!("拾忆: data.json import failed: {e}"),
+                    Err(e) => applog(app, &format!("导入旧版 data.json 失败：{e}")),
                 }
             }
             if let Err(e) = core.backup_daily(KEEP_BACKUPS) {
-                eprintln!("拾忆: backup failed: {e}");
+                applog(app, &format!("每日备份失败：{e}"));
             }
             Store { core: Mutex::new(Some(core)), error: None, path }
         }
-        Err(e) => Store { core: Mutex::new(None), error: Some(e.to_string()), path },
+        Err(e) => {
+            applog(app, &format!("打不开数据库：{e}"));
+            Store { core: Mutex::new(None), error: Some(e.to_string()), path }
+        }
     }
 }
 
@@ -774,16 +1052,30 @@ pub fn run() {
         .get("updater")
         .and_then(|u| u["pubkey"].as_str())
         .is_some_and(|k| !k.trim().is_empty());
-    let mut builder = tauri::Builder::default();
+    // a second launch (Start menu while 拾忆 sits in the tray) brings back the first
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)));
     if has_updater_key {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
     let app = builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .setup(|app| {
+            // the window starts hidden; launched at login it stays that way
+            let at_login = std::env::args().any(|a| a == "--autostart") && cfg!(any(target_os = "macos", windows));
+            if !at_login {
+                show_main(app.handle());
+            }
             let store = open_store(app.handle());
             app.manage(store);
             spawn_watcher(app.handle().clone());
+            spawn_reminder(app.handle().clone());
+            if cfg!(windows) {
+                if let Err(e) = build_tray(app.handle()) {
+                    applog(app.handle(), &format!("托盘图标创建失败：{e}"));
+                }
+            }
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{
@@ -810,14 +1102,19 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // On macOS closing the window keeps the app alive so the
-                // global shortcut still works; Cmd+Q quits for real.
-                if cfg!(target_os = "macos")
-                    && window.label() == "main"
-                    && !QUITTING.load(Ordering::SeqCst)
-                {
-                    let _ = window.hide();
-                    api.prevent_close();
+                // Closing the window keeps the app alive so reminders and the
+                // global shortcut still work: always on macOS (Cmd+Q quits),
+                // on Windows unless turned off (the tray menu quits).
+                if window.label() == "main" && !QUITTING.load(Ordering::SeqCst) {
+                    let app = window.app_handle();
+                    let keep = cfg!(target_os = "macos") || (cfg!(windows) && read_settings(app).close_to_tray);
+                    if keep {
+                        let _ = window.hide();
+                        api.prevent_close();
+                        if cfg!(windows) {
+                            tray_hint_once(app);
+                        }
+                    }
                 }
             }
         })
@@ -841,7 +1138,11 @@ pub fn run() {
             update_install,
             save_provider,
             list_models,
-            open_external
+            open_external,
+            save_prefs,
+            notify_test,
+            diagnostics,
+            open_feedback
         ])
         .build(context)
         .expect("error while building 拾忆");

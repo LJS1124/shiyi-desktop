@@ -178,3 +178,47 @@ fn http_reasons_are_readable() {
     assert!(http_reason(403, "<html>blocked by proxy</html>").contains("拒绝"));
     assert!(http_reason(404, "").contains("没有找到"));
 }
+
+// ---------- percent_encode / issue_url ----------
+
+#[test]
+fn percent_encode_keeps_unreserved_characters() {
+    use shiyi_core::update::percent_encode;
+    assert_eq!(percent_encode("a-Z_9.~"), "a-Z_9.~");
+}
+
+#[test]
+fn percent_encode_escapes_space_slash_utf8_and_reserved() {
+    use shiyi_core::update::percent_encode;
+    assert_eq!(percent_encode(" "), "%20");
+    assert_eq!(percent_encode("/"), "%2F");
+    assert_eq!(percent_encode("中"), "%E4%B8%AD");
+    assert_eq!(percent_encode("&=?#"), "%26%3D%3F%23");
+}
+
+#[test]
+fn issue_url_fills_title_and_body() {
+    use shiyi_core::update::issue_url;
+    let url = issue_url("Bug: x", "hello world");
+    assert!(url.starts_with("https://github.com/LJS1124/shiyi-desktop/issues/new?title=Bug%3A%20x&body="), "{url}");
+    assert!(url.ends_with("hello%20world"), "{url}");
+}
+
+#[test]
+fn issue_url_cuts_a_long_body_and_adds_a_note() {
+    use shiyi_core::update::{issue_url, percent_encode, MAX_ISSUE_URL};
+    const PREFIX: &str = "https://github.com/LJS1124/shiyi-desktop/issues/new?title=Bug%3A%20x&body=";
+    let url = issue_url("Bug: x", &"中".repeat(5000));
+    let note = percent_encode("\n\n…（内容太长，其余部分已复制，请直接粘贴在这里）");
+
+    assert!(url.len() <= MAX_ISSUE_URL, "len {}", url.len());
+    // the cut fills the link to within one character (9 encoded bytes) of the limit
+    assert!(url.len() > MAX_ISSUE_URL - 9, "len {}", url.len());
+    assert!(url.starts_with(PREFIX), "{url}");
+    assert!(url.ends_with(&note), "{url}");
+    assert!(url.contains(&percent_encode("内容太长")), "{url}");
+
+    // the body part is whole characters only: every cut char is one full "%E4%B8%AD"
+    let cut = &url[PREFIX.len()..url.len() - note.len()];
+    assert_eq!(cut.matches("%E4%B8%AD").count() * 9, cut.len(), "cut: {cut}");
+}

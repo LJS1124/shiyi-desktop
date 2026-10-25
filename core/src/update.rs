@@ -129,3 +129,40 @@ pub fn http_reason(status: u16, body: &str) -> String {
     }
     format!("HTTP {status}")
 }
+
+/// Percent-encodes everything except RFC 3986 unreserved characters.
+pub fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// Longest link we hand to the browser; GitHub refuses much longer ones.
+pub const MAX_ISSUE_URL: usize = 7000;
+
+/// "New issue" on this project with the title and body filled in. A body that
+/// would make the link too long is cut, with a note to paste the rest.
+pub fn issue_url(title: &str, body: &str) -> String {
+    let head = format!("{REPO_URL}/issues/new?title={}&body=", percent_encode(title.trim()));
+    let full = percent_encode(body);
+    if head.len() + full.len() <= MAX_ISSUE_URL {
+        return head + &full;
+    }
+    let note = percent_encode("\n\n…（内容太长，其余部分已复制，请直接粘贴在这里）");
+    let room = MAX_ISSUE_URL.saturating_sub(head.len() + note.len());
+    let mut cut = String::new();
+    for c in body.chars() {
+        let e = percent_encode(c.encode_utf8(&mut [0u8; 4]));
+        if cut.len() + e.len() > room {
+            break;
+        }
+        cut.push_str(&e);
+    }
+    head + &cut + &note
+}
