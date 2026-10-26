@@ -157,7 +157,7 @@ try:
         pg.evaluate("SY.noteError('e2e 测试报错', 'test')")
         pg.click('#s-about [data-act="diag-open"]'); pg.wait_for_selector("#diag-text")
         diag = pg.inner_text("#diag-text")
-        check("v1.4.0" in diag and "任务 " in diag and "e2e 测试报错" in diag, "diagnostics list version, counts and recent errors")
+        check("v1.4.1" in diag and "任务 " in diag and "e2e 测试报错" in diag, "diagnostics list version, counts and recent errors")
         check("sk-test" not in diag and "失败轨迹回放面板" not in diag, "diagnostics hold no key and no note contents")
         pg.click('#m-foot [data-act="feedback"]'); pg.wait_for_selector("#fb-title")
         pg.fill("#fb-title", "导图节点拖不动"); pg.fill("#fb-body", "拖到另一个分支后弹回原位")

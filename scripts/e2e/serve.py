@@ -76,10 +76,10 @@ def call(cmd, a):
         return {"ok": "今天要做 3 件，逾期 1 件"}
     if cmd == "diagnostics":
         st = call("core_query", {"q": {"q": "status"}}).get("ok", {})
-        return {"ok": {"version": "1.4.0", "os": "macos", "arch": "aarch64", "osVersion": "15.1", "counts": st.get("counts", {}), "permission": st.get("agent_permission"),
+        return {"ok": {"version": "1.4.1", "os": "macos", "arch": "aarch64", "osVersion": "15.1", "counts": st.get("counts", {}), "permission": st.get("agent_permission"),
                        "dbBytes": 1_350_000, "dbError": None, "lastBackup": "2026-10-25", "provider": FAKE["provider"], "hasKey": True, "format": "anthropic",
                        "model": "deepseek-flash", "quickModel": "deepseek-flash", "cli": True, "skill": True, "skillCurrent": True, "autoUpdate": True, "prefs": PREFS,
-                       "log": ["2026-10-25T09:00:01+08:00 启动 v1.4.0（macos/aarch64）", "2026-10-25T10:12:40+08:00 AI 调用失败（deepseek）：HTTP 401：invalid api key"]}}
+                       "log": ["2026-10-25T09:00:01+08:00 启动 v1.4.1（macos/aarch64）", "2026-10-25T10:12:40+08:00 AI 调用失败（deepseek）：HTTP 401：invalid api key"]}}
     if cmd == "open_feedback":
         FAKE["feedback"] = a; return {"ok": None}
     if cmd == "e2e_state":
@@ -88,16 +88,16 @@ def call(cmd, a):
         return {"ok": "你好"}
     if cmd == "app_info":
         import os
-        return {"ok": {"version": "1.4.0", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
+        return {"ok": {"version": "1.4.1", "repo": "https://github.com/LJS1124/shiyi-desktop", "data_path": args.db, "backups": str(pathlib.Path(args.db).parent / "backups"), "os": "macos", "auto_update": True}}
     if cmd == "check_update":
         # pretend a newer release exists unless SHIYI_FAKE_UPDATE=none
         import os
         if os.environ.get("SHIYI_FAKE_UPDATE") == "none":
-            return {"ok": {"available": False, "current": "1.4.0", "version": "1.4.0", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
+            return {"ok": {"available": False, "current": "1.4.1", "version": "1.4.1", "notes": "", "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.1.1"}}
         notes = (ROOT / "docs/releases/v1.1.1.md").read_text(encoding="utf-8")
-        return {"ok": {"available": True, "current": "1.4.0", "version": "1.4.0", "tag": "v1.4.0", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
-                       "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.4.0", "asset_name": "Shiyi_1.4.0_universal.dmg",
-                       "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.4.0/Shiyi_1.4.0_universal.dmg"}}
+        return {"ok": {"available": True, "current": "1.4.1", "version": "1.4.1", "tag": "v1.4.1", "notes": notes, "published_at": "2026-10-20T08:00:00Z",
+                       "page": "https://github.com/LJS1124/shiyi-desktop/releases/tag/v1.4.1", "asset_name": "Shiyi_1.4.1_universal.dmg",
+                       "asset_url": "https://github.com/LJS1124/shiyi-desktop/releases/download/v1.4.1/Shiyi_1.4.1_universal.dmg"}}
     if cmd == "update_install":
         return {"err": "检查更新失败：模拟环境不能安装"}
     if cmd == "open_project_url":
