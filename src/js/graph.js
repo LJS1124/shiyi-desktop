@@ -245,7 +245,82 @@ function visible() {
   return { g, nodes, edges, deg, center };
 }
 
-function layout(nodes, edges, fresh) {
+/* ---------- labels: wrapped to two short lines, measured for the layout ---------- */
+const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u3000-\u303f]/;
+const cw = c => (WIDE.test(c) ? 1 : c === ' ' ? 0.3 : /[A-Z0-9@#%&mwMW]/.test(c) ? 0.68 : 0.58);
+const units = s => [...s].reduce((a, c) => a + cw(c), 0);
+function wrapLabel(text, maxU, maxLines = 2) {
+  const ch = [...String(text || '').replace(/\s+/g, ' ').trim()];
+  const total = units(ch.join(''));
+  // a title that fits on two lines is split near the middle, not as 9 + 1 characters
+  const first = total > maxU && total <= maxU * 2 ? Math.min(maxU, total / 2 + 0.75) : maxU;
+  const lines = []; let i = 0;
+  while (i < ch.length && lines.length < maxLines) {
+    let u = 0, j = i;
+    const lim = lines.length ? maxU : first;
+    while (j < ch.length && u + cw(ch[j]) <= lim) { u += cw(ch[j]); j++; }
+    if (j === i) j = i + 1;
+    // don't cut an English word in half: finish it if it still fits, else break at the space before it
+    if (j < ch.length && /\w/.test(ch[j]) && /\w/.test(ch[j - 1])) {
+      let m = j; while (m < ch.length && /\w/.test(ch[m])) m++;
+      let k = j; while (k > i && ch[k - 1] !== ' ') k--;
+      if (units(ch.slice(i, m).join('')) <= maxU) j = m;
+      else if (k > i && units(ch.slice(i, k).join('')) >= lim * 0.5) j = k;
+    }
+    let line = ch.slice(i, j).join('').trim();
+    i = j; while (ch[i] === ' ') i++;
+    if (lines.length === maxLines - 1 && i < ch.length) {
+      const lc = [...line]; let lu = units(line);
+      while (lc.length && lu + 1 > maxU) lu -= cw(lc.pop());
+      line = lc.join('').trimEnd() + '…'; i = ch.length;
+    }
+    lines.push(line);
+  }
+  return lines.length ? lines : [''];
+}
+const FS = { tag: 11, project: 13.5 };
+/* the label lines and the space a node takes: half width, and how far it reaches above and below its centre */
+const geoCache = new Map();
+function geo(n, deg) {
+  const r = radius(n, deg), key = n.id + '|' + r + '|' + n.label;
+  let g = geoCache.get(key); if (g) return g;
+  const fs = FS[n.type] || 12.5, lh = Math.round(fs * 1.3);
+  const lines = wrapLabel(n.label, n.type === 'project' ? 10 : n.type === 'tag' ? 8 : 9);
+  const w = Math.max(...lines.map(units)) * fs * (n.type === 'project' || deg >= 3 ? 1.05 : 1);
+  g = { r, fs, lh, lines, hw: Math.max(r, w / 2) + 6, top: r + 4, bot: r + 5 + lines.length * lh };
+  if (geoCache.size > 4000) geoCache.clear();
+  geoCache.set(key, g);
+  return g;
+}
+
+/* Push apart nodes whose circle + label boxes overlap (sweep along x, so it
+   stays fast with many nodes). Pinned nodes (dragged by hand) stay put. */
+function collide(P, B, strength) {
+  const n = P.length, GAP = 6;
+  const order = [...Array(n).keys()].sort((a, b) => (P[a].x - B[a].hw) - (P[b].x - B[b].hw));
+  let hits = 0;
+  for (let a = 0; a < n; a++) {
+    const i = order[a], pi = P[i], bi = B[i];
+    const iRight = pi.x + bi.hw + GAP;
+    for (let c = a + 1; c < n; c++) {
+      const j = order[c], pj = P[j], bj = B[j];
+      if (pj.x - bj.hw >= iRight) break;
+      const ox = bi.hw + bj.hw + GAP - Math.abs(pi.x - pj.x);
+      const ci = pi.y + (bi.bot - bi.top) / 2, cj = pj.y + (bj.bot - bj.top) / 2;
+      const oy = (bi.top + bi.bot) / 2 + (bj.top + bj.bot) / 2 + GAP - Math.abs(ci - cj);
+      if (ox <= 0 || oy <= 0) continue;
+      hits++;
+      const wi = pi.pin ? 0 : pj.pin ? 1 : 0.5, wj = pj.pin ? 0 : pi.pin ? 1 : 0.5;
+      if (!wi && !wj) continue;
+      // move along the shorter way out; boxes are wide, so that is usually up/down
+      if (ox < oy * 1.4) { const d = (pi.x < pj.x || (pi.x === pj.x && i < j) ? -1 : 1) * ox * strength; pi.x += d * wi; pj.x -= d * wj; }
+      else { const d = (ci < cj || (ci === cj && i < j) ? -1 : 1) * oy * strength; pi.y += d * wi; pj.y -= d * wj; }
+    }
+  }
+  return hits;
+}
+
+function layout(nodes, edges, fresh, deg) {
   const arr = [...nodes.values()], n = arr.length; if (!n) return;
   const nb = new Map(); edges.forEach(e => { (nb.get(e.source) || nb.set(e.source, []).get(e.source)).push(e.target); (nb.get(e.target) || nb.set(e.target, []).get(e.target)).push(e.source); });
   let added = 0;
@@ -258,9 +333,10 @@ function layout(nodes, edges, fresh) {
   if (!added && !fresh) return;
   const P = arr.map(v => gpos.get(v.id)), idx = new Map(arr.map((v, i) => [v.id, i]));
   const E = edges.map(e => [idx.get(e.source), idx.get(e.target), e.kind]).filter(x => x[0] != null && x[1] != null);
-  const K = 72, iters = fresh ? (n > 500 ? 90 : 300) : 70;
+  const K = 80, iters = fresh ? (n > 500 ? 90 : 300) : 70;
   let temp = fresh ? 70 : 18;
   const fx = new Float64Array(n), fy = new Float64Array(n);
+  const B = arr.map(v => geo(v, (deg && deg.get(v.id)) || 0));
   for (let it = 0; it < iters; it++) {
     fx.fill(0); fy.fill(0);
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
@@ -283,7 +359,60 @@ function layout(nodes, edges, fresh) {
       P[i].x += fx[i] * s; P[i].y += fy[i] * s;
     }
     temp = Math.max(1, temp * 0.975);
+    // in the second half, labels start taking up room
+    if (it > iters * 0.5) collide(P, B, 0.35);
   }
+  // then no box may overlap another; where they are packed too tightly to
+  // sort out (many items on one tag), spread that area a little and retry
+  for (let round = 0; round < 8; round++) {
+    let left = 1;
+    for (let pass = 0; pass < 120 && left; pass++) left = collide(P, B, 0.9);
+    if (!left) break;
+    let cx = 0, cy = 0; P.forEach(q => { cx += q.x; cy += q.y; }); cx /= n; cy /= n;
+    P.forEach(q => { if (!q.pin) { q.x = cx + (q.x - cx) * 1.12; q.y = cy + (q.y - cy) * 1.12; } });
+  }
+  // separate groups drift far apart; on a fresh layout, pack them like tiles
+  if (fresh) pack(P, B, E, n);
+}
+
+/* Pack the connected groups like tiles: tallest first in rows, smaller ones
+   stacked in columns beside them. Several row widths are tried and the one
+   that best fills a canvas of this shape wins, so the graph fits the window
+   without big gaps. */
+function pack(P, B, E, n) {
+  const parent = [...Array(n).keys()], find = x => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+  E.forEach(([a, b]) => { parent[find(a)] = find(b); });
+  const groups = new Map();
+  for (let i = 0; i < n; i++) { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(i); }
+  if (groups.size < 2) return;
+  const boxes = [...groups.values()].map(ids => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    ids.forEach(i => { x0 = Math.min(x0, P[i].x - B[i].hw); x1 = Math.max(x1, P[i].x + B[i].hw); y0 = Math.min(y0, P[i].y - B[i].top); y1 = Math.max(y1, P[i].y + B[i].bot); });
+    return { ids, x0, y0, w: x1 - x0, h: y1 - y0 };
+  }).sort((a, b) => b.h - a.h || b.w - a.w);
+  const GAP = 36, aspect = G.aspect || 1.8;
+  const place = rowW => {
+    const at = []; let y = 0, rowH = 0, colX = 0, colW = 0, colY = 0, W = 0, H = 0, rowStart = true;
+    for (const b of boxes) {
+      if (!rowStart && b.h <= rowH - colY - GAP && Math.max(colW, b.w) + colX <= rowW) {
+        at.push([colX, y + colY + GAP]); colY += GAP + b.h; colW = Math.max(colW, b.w);   // under the last one in this column
+      } else {
+        let x = rowStart ? 0 : colX + colW + GAP;
+        if (!rowStart && x + b.w > rowW) { y += rowH + GAP; x = 0; rowStart = true; }
+        if (rowStart) rowH = b.h;
+        at.push([x, y]); colX = x; colW = b.w; colY = b.h; rowStart = false;
+      }
+      const [x0, y0] = at[at.length - 1]; W = Math.max(W, x0 + b.w); H = Math.max(H, y0 + b.h);
+    }
+    return { at, W, H, fit: Math.min(aspect / W, 1 / H) };
+  };
+  const total = boxes.reduce((a, b) => a + b.w + GAP, 0), widest = Math.max(...boxes.map(b => b.w));
+  let best = null;
+  for (let k = 0; k <= 16; k++) {
+    const t = place(widest + (total - widest) * k / 16);
+    if (!best || t.fit > best.fit) best = t;
+  }
+  boxes.forEach((b, i) => { const [x, y] = best.at[i], dx = x - b.x0, dy = y - b.y0; b.ids.forEach(j => { P[j].x += dx; P[j].y += dy; }); });
 }
 
 const radius = (n, deg) => (n.type === 'tag' ? 5 : n.type === 'project' ? 11 + Math.min(8, Math.sqrt(deg) * 1.6) : 7 + Math.min(9, Math.sqrt(deg) * 1.7));
@@ -298,12 +427,16 @@ SY.views.graph = {
     const isolated = [...g.nodes.values()].filter(n => n.type === 'idea' && n.deg === 0).length;
     const since = S.ui.linkSweepAt || 0;
     const freshN = [...list('ideas').filter(i => i.status !== 'archived'), ...list('projects').filter(p => p.status !== 'done'), ...list('maps')].filter(d => (d.updatedAt || d.createdAt || 0) > since).length;
-    layout(v.nodes, v.edges, !G.laidOut);
+    layout(v.nodes, v.edges, !G.laidOut, v.deg);
     G.laidOut = true;
     const ns = [...v.nodes.values()];
     let minX = 0, minY = 0, maxX = 0, maxY = 0;
-    ns.forEach((n, i) => { const p = gpos.get(n.id); if (i === 0) { minX = maxX = p.x; minY = maxY = p.y; } minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); });
-    const pad = 70, W = maxX - minX + pad * 2, H = maxY - minY + pad * 2, ox = pad - minX, oy = pad - minY;
+    ns.forEach((n, i) => {
+      const p = gpos.get(n.id), b = geo(n, v.deg.get(n.id) || 0);
+      if (i === 0) { minX = p.x - b.hw; maxX = p.x + b.hw; minY = p.y - b.top; maxY = p.y + b.bot; }
+      minX = Math.min(minX, p.x - b.hw); maxX = Math.max(maxX, p.x + b.hw); minY = Math.min(minY, p.y - b.top); maxY = Math.max(maxY, p.y + b.bot);
+    });
+    const pad = 30, W = maxX - minX + pad * 2, H = maxY - minY + pad * 2, ox = pad - minX, oy = pad - minY;
     G.off = { ox, oy, W, H };
     const sel = G.sel && v.nodes.has(G.sel) ? G.sel : null;
     const nbr = new Set(); if (sel) { nbr.add(sel); v.edges.forEach(e => { if (e.source === sel) nbr.add(e.target); if (e.target === sel) nbr.add(e.source); }); }
@@ -317,11 +450,11 @@ SY.views.graph = {
     }).join('');
     const q = (G.q || '').trim().toLowerCase();
     const nodeSvg = ns.map(n => {
-      const p = gpos.get(n.id), d = v.deg.get(n.id) || 0, r = radius(n, d);
+      const p = gpos.get(n.id), d = v.deg.get(n.id) || 0, b = geo(n, d), r = b.r;
       const done = n.type === 'task' && n.d.status === 'done';
       const hit = q && n.label.toLowerCase().includes(q);
       const cls = `gnode t-${n.type} ${done ? 'is-done' : ''} ${sel && !nbr.has(n.id) ? 'is-dim' : ''} ${sel && nbr.has(n.id) ? 'is-nb' : ''} ${sel === n.id ? 'is-sel' : ''} ${hit ? 'is-hit' : ''} ${v.center === n.id ? 'is-center' : ''} ${d >= 3 || n.type === 'project' ? 'is-hub' : ''}`;
-      return `<g class="${cls}" data-id="${esc(n.id)}" transform="translate(${(p.x + ox).toFixed(1)},${(p.y + oy).toFixed(1)})"><circle r="${r.toFixed(1)}" style="--c:var(--${TYPE_C[n.type]})"/><text y="${(r + 13).toFixed(1)}">${esc(short(n.label))}</text><title>${TYPE_CN[n.type]} · ${esc(n.label)}</title></g>`;
+      return `<g class="${cls}" data-id="${esc(n.id)}" transform="translate(${(p.x + ox).toFixed(1)},${(p.y + oy).toFixed(1)})"><circle r="${r.toFixed(1)}" style="--c:var(--${TYPE_C[n.type]})"/><text y="${(r + 4 + b.fs).toFixed(1)}">${b.lines.map((l, k) => `<tspan x="0" dy="${k ? b.lh : 0}">${esc(l)}</tspan>`).join('')}</text><title>${TYPE_CN[n.type]} · ${esc(n.label)}</title></g>`;
     }).join('');
     const typeChip = (k, l) => `<button type="button" class="chip ${o.types[k] ? 'is-on' : ''}" data-act="g-type" data-v="${k}"><i class="gdot t-${k}"></i>${l}</button>`;
     const centerChip = v.center ? `<span class="chip is-on gcenter">以「${esc(short(nameOf(v.center), 14))}」为中心<span class="seg seg-sm" style="margin-left:6px">${[1, 2, 3].map(dp => `<button type="button" class="${o.depth === dp ? 'is-on' : ''}" data-act="g-depth" data-v="${dp}">${dp} 层</button>`).join('')}</span><button type="button" class="mini" data-act="g-uncenter" aria-label="取消">${icon('x', 12)}</button></span>` : '';
@@ -352,9 +485,10 @@ SY.views.graph = {
     const wrap = root.querySelector('#g-wrap'), canvas = root.querySelector('#g-canvas'); if (!wrap) return;
     const fresh = !G.pan;
     if (!G.pan) G.pan = { x: 0, y: 0, k: 1 };
-    const pz = SY.panZoom(wrap, canvas, G.pan, { onChange: st => wrap.classList.toggle('g-low', st.k < 0.85) });
+    { const r = wrap.getBoundingClientRect(); if (r.width > 200 && r.height > 150) G.aspect = r.width / r.height; }
+    const pz = SY.panZoom(wrap, canvas, G.pan, { onChange: st => wrap.classList.toggle('g-low', st.k < 0.45) });
     G.pz = pz;
-    if (fresh || G.refit) { G.refit = false; requestAnimationFrame(() => pz.fit(G.off.W, G.off.H, 20)); }
+    if (fresh || G.refit) { G.refit = false; requestAnimationFrame(() => pz.fit(G.off.W, G.off.H, 36)); }
     const svg = root.querySelector('#g-svg');
     svg.querySelectorAll('.gnode').forEach(el => el.addEventListener('pointerdown', e => nodeDown(e, el, wrap)));
     svg.querySelectorAll('.gnode').forEach(el => el.addEventListener('dblclick', e => { e.stopPropagation(); openEntity(el.dataset.id); }));
@@ -378,6 +512,15 @@ SY.views.graph = {
     if ((e.key === 'Delete' || e.key === 'Backspace') && G.edge) { const id = G.edge; G.edge = null; delLink(id); return true; }
     return false;
   }
+};
+
+/* for tests: how many node + label boxes overlap in the current layout */
+SY.graphOverlaps = () => {
+  const v = visible(), ns = [...v.nodes.values()].filter(n => gpos.has(n.id));
+  const bx = ns.map(n => { const p = gpos.get(n.id), b = geo(n, v.deg.get(n.id) || 0); return [p.x - b.hw, p.x + b.hw, p.y - b.top, p.y + b.bot]; });
+  let k = 0;
+  for (let i = 0; i < bx.length; i++) for (let j = i + 1; j < bx.length; j++) { const A = bx[i], B = bx[j]; if (A[0] < B[1] - 0.5 && B[0] < A[1] - 0.5 && A[2] < B[3] - 0.5 && B[2] < A[3] - 0.5) k++; }
+  return k;
 };
 
 function centerOn(id) {
