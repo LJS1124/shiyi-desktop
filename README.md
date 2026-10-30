@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-11%2B-111?logo=apple" alt="macOS 11+">
   <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/version-1.4.1-0A84FF" alt="1.4.1">
+  <img src="https://img.shields.io/badge/version-1.4.2-0A84FF" alt="1.4.2">
 </p>
 
 拾忆是一个 macOS 和 Windows 桌面应用，管理随手冒出来的想法、工作和生活里的项目，并把它们连成一张知识图谱。
@@ -24,11 +24,11 @@
 
 - **随手记，不打断手头的事**：在任何应用里按 <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd>（Windows 上是 <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd>）唤出记录框；`#标签` 自动归类，`[[标题]]` 双链到别的条目。记下的时候会提示「可能和哪条相关」，这一步只比较文字，不调用 AI。
 - **<kbd>⌘</kbd><kbd>K</kbd> 找到一切**：一个框里搜灵感、任务、项目、导图节点和标签，也能直接跳到某个视图、新建项目、切换深浅色；搜不到就回车记下来。
-- **到点提醒，不漏事**：每天早上一条系统通知，告诉你今天要做几件、有没有逾期。Windows 上关闭窗口会缩到托盘继续运行，也可以开机自动启动。
+- **到点提醒，不漏事**：每天早上一条系统通知，告诉你今天要做几件、有没有逾期。之前放进「今日」但没做完的任务不会悄悄消失，逾期的点一下就能改到今天、明天或下周一，接下来 7 天要到期的也一眼看得到。Windows 上关闭窗口会缩到托盘继续运行，也可以开机自动启动。
 - **一个项目，六种视图**：看板、日历、甘特图、燃尽图、网络图（PERT）、思维导图，用的是同一份任务数据。日历里多天的任务横跨显示，拖动改日期，双击某一天直接加任务，没排期的任务从侧栏拖上去就排好了。依赖、三点估算和关键路径在各个视图之间是连通的。
 - **知识图谱**：手动关联、AI 建议、`[[双链]]`、相同标签、项目归属和依赖，都画在一张图上。可以只看某一条周围的局部关系，也可以拖线建立关联。
 - **AI 原生，但由你掌控**：外部 AI 助手通过命令行读写；内置的 AI 功能只在你点按钮时运行，结果先预览、改完再写入。AI 建的关联必须等你确认才算数，每一批修改都可以撤销。
-- **本地优先**：数据只在本机，每天自动备份；不联网也能用（只有 AI 功能需要联网）。
+- **本地优先，删了也找得回**：数据只在本机，每天自动备份，在设置里就能恢复到任意一天；删掉的东西在「最近删除」里一键恢复，<kbd>⌘</kbd><kbd>Z</kbd> 随时撤销刚才的修改。不联网也能用（只有 AI 功能需要联网）。
 - **macOS 和 Windows，一键更新**：有新版本时侧栏会提示，点「立即更新」就自动下载、核对签名、安装并重启；更新前先完整备份数据库。
 
 ## 看看它
@@ -101,7 +101,7 @@
 命令行的输入和输出都是 JSON。出错时会返回 `code`、`message`，以及告诉 AI 怎么改的 `hint`：
 
 ```bash
-shiyi today                                         # 今天要做的、逾期的、收件箱、进行中的项目
+shiyi today                                         # 今天要做的、逾期的、之前计划没做完的、收件箱、进行中的项目
 shiyi list tasks --status todo,doing --project 网站改版
 shiyi get <id 或标题>                               # 详情 + 反向链接 + 依赖
 shiyi search 暗色 模式
@@ -182,6 +182,7 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 | --- | --- |
 | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | 在任何应用里唤出拾忆，并把光标放进记录框。关闭窗口后拾忆仍在后台运行：macOS 上 <kbd>⌘</kbd><kbd>Q</kbd> 才是真正退出，Windows 上它在托盘里，右键菜单可以退出 |
 | <kbd>⌘</kbd><kbd>K</kbd> | 搜索和命令 |
+| <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> | 撤销自己刚才的修改 / 重做（输入框里仍是撤销文字；AI 的修改到操作记录里撤销） |
 | <kbd>⌘</kbd><kbd>N</kbd> 或 <kbd>/</kbd> | 聚焦记录框；以 `/t ` 开头直接记成任务 |
 | <kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd> | 切换视图 |
 | `[[` | 在记录框和备注里弹出条目列表，选中即插入双链 |
@@ -201,6 +202,8 @@ Windows 上 <kbd>⌘</kbd> 换成 <kbd>Ctrl</kbd>，全局唤出改为 <kbd>Ctrl
 
 - **位置**：macOS 是 `~/Library/Application Support/app.shiyi.desktop/shiyi.db`，Windows 是 `%APPDATA%\app.shiyi.desktop\shiyi.db`（SQLite），可以用环境变量 `SHIYI_DB` 改到别处。
 - **备份**：每天自动备份一份到 `backups/shiyi-日期.db`，保留最近 14 天；每次升级后第一次打开另存一份 `backups/upgrade-…db`，保留最近 5 次；操作记录保留 180 天。
+- **从备份恢复**：「设置 → 数据 → 从备份恢复…」列出每份备份的时间和里面有多少条内容，选一份即可恢复。恢复前会先把当前数据另存为 `backups/before-restore-…db`（保留最近 5 份），所以恢复本身也能撤销。命令行 `shiyi backups` 可以查看备份列表。
+- **最近删除**：「操作记录 → 最近删除」列出删掉、还没恢复的灵感、项目、任务和导图，一键恢复；删除项目时一起删掉的任务会跟着回来。
 - **导出 / 导入**：「设置 → 数据」可以导出、导入 JSON。网页预览导出的备份和旧版备份都能导入，导入本身也能撤销。
 - **从旧版升级**：升级时会自动把旧的 `data.json` 导入数据库，原文件改名为 `data.json.imported`。
 - **API Key**：存在同目录的 `settings.json` 里，不会离开本机（macOS 上文件权限是 600）。

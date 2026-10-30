@@ -391,6 +391,13 @@ fn today(conn: &Connection, clock: &Clock, o: &Map<String, Value>) -> Result<Val
     let planned: Vec<Value> = tasks.iter().filter(|t| open(t)).filter(|t| s(t, "today_date") == today || due(t) == today).map(b).collect();
     let doing: Vec<Value> = tasks.iter().filter(|t| s(t, "status") == "doing" && s(t, "today_date") != today && due(t) != today && !(due(t) < today && !due(t).is_empty())).map(b).collect();
     let upcoming: Vec<Value> = tasks.iter().filter(|t| open(t)).filter(|t| due(t) > today && due(t) <= week_end && s(t, "today_date") != today).map(b).collect();
+    // planned for an earlier day and not done, and not already overdue or due today
+    let carried: Vec<Value> = tasks
+        .iter()
+        .filter(|t| open(t))
+        .filter(|t| { let td = s(t, "today_date"); !td.is_empty() && td < today.as_str() && !(!due(t).is_empty() && due(t) <= today) })
+        .map(b)
+        .collect();
     let done_today: Vec<Value> = tasks
         .iter()
         .filter(|t| s(t, "status") == "done" && t.get("done_at").and_then(Value::as_str).and_then(|x| clock.date_of(x)).as_deref() == Some(today.as_str()))
@@ -421,6 +428,7 @@ fn today(conn: &Connection, clock: &Clock, o: &Map<String, Value>) -> Result<Val
         "weekday": WEEKDAY_CN[crate::time::weekday(days) as usize],
         "overdue": overdue,
         "today": planned,
+        "carried_over": carried,
         "doing": doing,
         "upcoming_7d": upcoming,
         "done_today": done_today,

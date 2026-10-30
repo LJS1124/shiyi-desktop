@@ -977,6 +977,23 @@ fn diagnostics(app: AppHandle, store: State<'_, Store>) -> Value {
     })
 }
 
+/// The automatic backups, newest first, with what each holds.
+#[tauri::command]
+fn list_backups(store: State<'_, Store>) -> Result<Value, Value> {
+    with_core(&store, |c| c.list_backups().map(Value::Array))
+}
+
+/// Puts the data back to a backup; the current data is saved as a backup first.
+#[tauri::command]
+fn restore_backup(app: AppHandle, store: State<'_, Store>, file: String) -> Result<Value, Value> {
+    let r = with_core(&store, |c| c.restore_backup(&file));
+    match &r {
+        Ok(v) => applog(&app, &format!("从备份恢复：{file}（恢复前的数据另存为 {}）", v["saved_current"].as_str().unwrap_or(""))),
+        Err(e) => applog(&app, &format!("从备份恢复失败：{}", e["message"].as_str().unwrap_or(""))),
+    }
+    r
+}
+
 /// Opens "New issue" on GitHub with the title and text filled in.
 #[tauri::command]
 fn open_feedback(title: String, body: String) -> Result<(), String> {
@@ -1065,6 +1082,14 @@ pub fn run() {
     let app = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // size, position and maximised state come back on the next start (not
+        // visibility: the window starts hidden and setup decides); the plugin
+        // skips a position on a display that is no longer connected
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::SIZE | tauri_plugin_window_state::StateFlags::POSITION | tauri_plugin_window_state::StateFlags::MAXIMIZED)
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .setup(|app| {
             // the window starts hidden; launched at login it stays that way
@@ -1147,7 +1172,9 @@ pub fn run() {
             save_prefs,
             notify_test,
             diagnostics,
-            open_feedback
+            open_feedback,
+            list_backups,
+            restore_backup
         ])
         .build(context)
         .expect("error while building 拾忆");

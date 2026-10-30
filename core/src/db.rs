@@ -1,7 +1,7 @@
 use crate::time::Clock;
 use crate::{Error, Result};
-use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::{Map, Value};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
 const SCHEMA: &str = r#"
@@ -245,6 +245,72 @@ impl Core {
         Ok(Some(target))
     }
 
+    fn backups_dir(&self) -> Option<PathBuf> {
+        self.path.as_ref().map(|p| p.parent().map(|d| d.join("backups")).unwrap_or_else(|| PathBuf::from("backups")))
+    }
+
+    /// The backups that can be restored, newest first: file name, kind
+    /// (`daily`, `upgrade`, `restore` = saved just before a restore), size,
+    /// time, and how many of each item it holds (`null` if it can't be read).
+    pub fn list_backups(&self) -> Result<Vec<Value>> {
+        let Some(dir) = self.backups_dir() else { return Ok(vec![]) };
+        let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(vec![]) };
+        let clock = self.clock();
+        let mut out = vec![];
+        for e in entries.filter_map(|e| e.ok()) {
+            let name = e.file_name().to_string_lossy().to_string();
+            let Some(kind) = backup_kind(&name) else { continue };
+            let Ok(meta) = e.metadata() else { continue };
+            let ms = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0);
+            out.push(json!({ "file": name, "kind": kind, "bytes": meta.len(), "modified": clock.iso(ms), "modified_ms": ms, "counts": backup_counts(&e.path()).ok() }));
+        }
+        out.sort_by(|a, b| b["modified_ms"].as_i64().cmp(&a["modified_ms"].as_i64()).then_with(|| b["file"].as_str().cmp(&a["file"].as_str())));
+        Ok(out)
+    }
+
+    /// Puts the whole database back to one of the backups. The data as it is
+    /// now is saved first as `backups/before-restore-<time>.db` (the newest 5
+    /// are kept), so a restore can itself be undone by restoring that file.
+    pub fn restore_backup(&mut self, file: &str) -> Result<Value> {
+        let dir = self.backups_dir().ok_or_else(|| Error::new("invalid_request", "this database has no backups folder"))?;
+        if file.contains(['/', '\\']) || file.contains("..") || backup_kind(file).is_none() {
+            return Err(Error::new("invalid_value", format!("not a backup file: {file:?}")));
+        }
+        let src_path = dir.join(file);
+        if !src_path.is_file() {
+            return Err(Error::new("not_found", format!("no backup named {file:?}")).hint("list them with `shiyi backups`"));
+        }
+        backup_counts(&src_path).map_err(|_| Error::new("invalid_value", "这份备份打不开，可能已经损坏"))?;
+        let stamp: String = self.clock().now_iso().chars().take(19).filter(|c| *c != ':').map(|c| if c == 'T' { '-' } else { c }).collect();
+        // never reuse a name: two restores within one second each keep their copy
+        let (saved, saved_path) = (1..)
+            .map(|n: u32| if n == 1 { format!("before-restore-{stamp}.db") } else { format!("before-restore-{stamp}-{n}.db") })
+            .map(|name| { let path = dir.join(&name); (name, path) })
+            .find(|(_, path)| !path.exists())
+            .expect("an unused name");
+        self.conn.execute("VACUUM INTO ?1", [saved_path.to_string_lossy().as_ref()])?;
+        {
+            let src = Connection::open_with_flags(&src_path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+            let b = rusqlite::backup::Backup::new(&src, &mut self.conn)?;
+            b.run_to_completion(512, std::time::Duration::ZERO, None)?;
+        }
+        // an older backup may predate parts of the schema; and it is this version that runs now
+        self.init(true)?;
+        Core::meta_set(&self.conn, "app_version", crate::VERSION)?;
+        // keep the newest 5 copies (by when they were written)
+        let mut olds: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().map_or(false, |n| n.starts_with("before-restore-") && n.ends_with(".db")))
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .filter(|(_, p)| *p != saved_path)
+            .collect();
+        olds.sort();
+        while olds.len() > 4 {
+            let _ = std::fs::remove_file(olds.remove(0).1);
+        }
+        Ok(json!({ "restored": file, "saved_current": saved }))
+    }
+
     /// One backup per day in `<db dir>/backups`, keeping the newest `keep`.
     /// Also trims the operation log to the last 180 days.
     pub fn backup_daily(&self, keep: usize) -> Result<Option<PathBuf>> {
@@ -271,6 +337,35 @@ impl Core {
         self.conn.execute("DELETE FROM ops WHERE ts_ms < ?1", [cutoff])?;
         Ok(made)
     }
+}
+
+fn backup_kind(name: &str) -> Option<&'static str> {
+    if !name.ends_with(".db") {
+        return None;
+    }
+    if name.starts_with("shiyi-") {
+        Some("daily")
+    } else if name.starts_with("upgrade-") {
+        Some("upgrade")
+    } else if name.starts_with("before-restore-") {
+        Some("restore")
+    } else {
+        None
+    }
+}
+
+/// Items in a backup file by type, read without touching it.
+fn backup_counts(path: &Path) -> Result<Value> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+    let mut st = conn.prepare("SELECT type, COUNT(*) FROM entities WHERE deleted_at IS NULL GROUP BY type")?;
+    let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+    let mut m = Map::new();
+    for r in rows {
+        let (t, n) = r?;
+        let plural = crate::model::type_def(&t).map(|d| d.plural).unwrap_or("other");
+        m.insert(plural.into(), json!(n));
+    }
+    Ok(Value::Object(m))
 }
 
 pub(crate) fn parse_doc(text: &str) -> Result<Map<String, Value>> {

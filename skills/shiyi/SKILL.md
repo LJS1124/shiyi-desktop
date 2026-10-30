@@ -32,7 +32,7 @@ Relations: relates_to, inspired_by, derived_from, part_of, supports, contradicts
 ## Reading
 
 ```bash
-shiyi today                                   # overdue, planned today, doing, next 7 days, inbox, active projects
+shiyi today                                   # overdue, planned today, carried over (planned earlier, not done), doing, next 7 days, inbox, active projects
 shiyi list tasks --status todo,doing --project 网站改版 --due-before fri
 shiyi list ideas --status inbox --tag 设计
 shiyi list projects --status active
@@ -97,7 +97,7 @@ Every write returns `"batch": "bat_…"`. To revert: `shiyi undo <batch> --as cl
 - **The user's things are theirs.** Prefer updating status (`archived`, `paused`, `done`) over deleting. Never delete or rewrite user-created content without being asked.
 - **Knowledge graph.** Links you create are suggestions: with `write` permission they are always stored as `status: "suggested"` (the result says `needs_review: true`) and only the user can accept them in the app — `link.confirm` from you returns `permission_denied`. Always give a short `note` saying why the two belong together. `shiyi related <id>` is a cheap way to find candidates before you judge them yourself. You can also write `[[exact title]]` inside idea text or notes; it becomes a "mentions" edge.
 - **Plans.** When breaking down a project: 3–12 concrete tasks with verbs, estimates in days as `optimistic,likely,pessimistic`, dependencies only where order truly matters, then `project.schedule`. Use one `apply` batch so the user can undo the whole plan at once.
-- **Today.** "What should I do today" → `shiyi today`, then suggest a short list and offer to set `today_date` (`--today`) on the chosen tasks.
+- **Today.** "What should I do today" → `shiyi today`, then suggest a short list and offer to set `today_date` (`--today`) on the chosen tasks. `carried_over` lists tasks planned for an earlier day that were never finished; ask whether to move them to today rather than doing it silently.
 - **Report back** in a sentence or two: what you changed (titles, not ids) and the batch id for undo.
 
 ## Troubleshooting

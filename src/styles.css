@@ -849,3 +849,57 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .set-sec .opt-chk{white-space:normal}
 .te.ok{color:var(--mint-ink)} .te.bad{color:var(--rose-ink)}
 pre.diag{margin:0;padding:12px 14px;border-radius:12px;background:var(--clay-2);font-family:var(--f-mono);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;user-select:text;-webkit-user-select:text;color:var(--ink-2)}
+
+/* Today: carried over, next 7 days, reschedule */
+.sh .sh-acts{margin-left:auto;display:flex;gap:4px;letter-spacing:0}
+.carried .today-btn{opacity:1}
+.carried .tlist{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--butter) 45%,transparent)}
+.planned{flex:none;align-self:center;font-size:11.5px;color:var(--butter-ink);background:var(--butter-soft);border-radius:8px;padding:2px 8px;font-family:var(--f-mono)}
+.resched{flex:none;display:flex;gap:2px;align-self:center;opacity:.55;transition:opacity .12s}
+.trow:hover .resched,.trow.is-sel .resched,.resched:focus-within{opacity:1}
+.resched .mini{height:26px;padding:0 8px;font-size:12px}
+.sh-toggle{display:inline-flex;align-items:center;gap:6px;font:inherit;color:inherit;letter-spacing:inherit}
+.sh-toggle svg{transform:rotate(90deg);transition:transform .15s}
+.upcoming.is-closed .sh-toggle svg{transform:none}
+.up-day{font-size:12px;color:var(--ink-3);font-weight:650;margin:10px 6px 6px}
+.upcoming .up-day:first-of-type{margin-top:0}
+.due.is-finished{color:var(--mint-ink)}
+
+/* backups */
+.bk-now{display:flex;align-items:center;gap:10px;font-size:13px;padding:2px 4px}
+.bk-list{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,420px);overflow:auto}
+.bk-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--clay-2)}
+.bk-main{flex:1;min-width:0}
+.bk-t{font-size:12.5px;color:var(--ink)}
+
+/* operation log: recently deleted */
+.trash{display:flex;flex-direction:column;gap:8px;max-width:920px}
+.trash-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px}
+.trash-main{flex:1;min-width:0}
+.trash-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ideas as rows */
+.group-h .n{font-family:var(--f-mono);font-weight:500;margin-left:6px;letter-spacing:0}
+.ilist{margin-bottom:6px}
+.irow{align-items:center}
+.irow .star{flex:none;margin:-2px 0}
+.irow .idea-text{font-size:14px;line-height:1.55;-webkit-line-clamp:2;font-weight:550}
+.irow .meta{margin-top:3px}
+.irow .row-acts{flex:none;display:flex;gap:0;align-items:center;opacity:.5;transition:opacity .12s}
+.irow:hover .row-acts,.irow.is-sel .row-acts,.irow .row-acts:focus-within{opacity:1}
+.irow .row-acts .mini{padding:0 8px}
+.irow.is-faded{opacity:.62}
+@media (max-width:1240px){.irow .row-acts .al{display:none}.irow .row-acts .mini{padding:0 7px}}
+
+/* sidebar footer, shortcuts */
+.foot-acts{display:flex;gap:4px;flex-wrap:wrap;margin:0 -6px}
+.kb-list{display:flex;flex-direction:column;gap:8px}
+.kb-row{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:baseline;font-size:13px}
+.kb-row b{font-size:12px;color:var(--ink)}
+/* short windows: a denser sidebar */
+@media (max-height:780px){
+  .side{gap:10px}
+  .nav{gap:1px}
+  .nav button{padding:6px 12px}
+  .nav-h{padding:8px 12px 4px}
+}

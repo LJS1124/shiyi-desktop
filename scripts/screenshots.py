@@ -68,6 +68,7 @@ try:
             {"op": "idea.create", "ref": "chart", "text": "评测报告自动生成趋势图，一眼看出哪类工单在退步", "tags": ["agent"]},
             {"op": "idea.create", "ref": "ddia", "text": "读 DDIA 第 5 章「复制」，写一篇笔记", "tags": ["读书"]},
             {"op": "idea.create", "text": "给家里 NAS 做一份异地备份", "tags": ["生活"]},
+            {"op": "task.create", "title": "回复房东关于续租的邮件", "today": "-1d"},
             {"op": "link.create", "source": "$regress", "target": "proj_s-eval", "relation": "supports", "note": "回归集就是评测集的一部分"},
             {"op": "link.create", "source": "$chart", "target": "task_s-a7", "relation": "supports", "note": "报告模板里正好需要趋势图"},
             {"op": "link.create", "source": "$ddia", "target": "proj_s-read", "relation": "part_of", "note": "可以作为 Q4 的第一本"},

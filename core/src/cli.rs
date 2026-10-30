@@ -22,6 +22,7 @@ READ
   shiyi trash                               soft-deleted items
   shiyi schema [type]                       fields, ops and conventions
   shiyi status | doctor
+  shiyi backups                             automatic backups (daily, before upgrades and restores); restore them in the app
 
 WRITE (every write prints a batch id; `shiyi undo <batch>` reverts it)
   shiyi idea add <text…> [--tag t]… [--note n] [--project p] [--star]
@@ -354,6 +355,7 @@ fn run(sess: &Session, a: &Args) -> Result<Value> {
         }
         "skill" => skill(a),
         "providers" => Ok(json!({ "ok": true, "providers": crate::providers::catalog_json() })),
+        "backups" => Ok(json!({ "ok": true, "backups": sess.open()?.list_backups()? })),
         "permission" => sess.query(json!({ "q": "settings" })),
         _ => {
             if let Some(td) = model::type_def(cmd) {

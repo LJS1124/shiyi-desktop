@@ -128,7 +128,8 @@ SY.mods.pert = {
     if (!st) st = S.view.pert[key] = { x: 0, y: 0, k: 1 };
     const pz = SY.panZoom(wrap, canvas, st);
     SY.pertPZ = pz;
-    if (fresh) requestAnimationFrame(() => pz.fit(Number(wrap.dataset.w), Number(wrap.dataset.h), 30));
+    // readable from the start: no smaller than 70 %, beginning at the left (where the network starts)
+    if (fresh) requestAnimationFrame(() => pz.fit(Number(wrap.dataset.w), Number(wrap.dataset.h), 30, { minK: 0.7 }));
     wrap.querySelectorAll('.pe-hit').forEach(h => h.addEventListener('click', e => { e.stopPropagation(); selEdge = h.dataset.edge; SY.renderAll(); }));
     wrap.addEventListener('click', e => { if (!e.target.closest('.pe-hit,.pnode') && selEdge) { selEdge = null; SY.renderAll(); } });
     wrap.querySelectorAll('.pn-handle').forEach(hd => hd.addEventListener('pointerdown', e => linkDown(e, hd, wrap, st)));

@@ -2,7 +2,7 @@
 (() => {
 'use strict';
 const SY = window.SY, S = SY.S;
-const { esc, icon, TODAY, WD, ymd, isoWeek, weekStartTs, ageDays, ago, dueLabel, list, getP, pColor, cv, taskSort, taskRow, progBar, pStats, AREA, PROJ_ST } = SY;
+const { esc, icon, TODAY, WD, ymd, isoWeek, weekStartTs, ageDays, ago, dueLabel, list, getP, pColor, cv, taskSort, taskRow, progBar, pStats, AREA, PROJ_ST, isYmd, addDays, parseYmd, md } = SY;
 
 /* ---------------- today ---------------- */
 SY.views.today = {
@@ -11,7 +11,9 @@ SY.views.today = {
     const all = list('tasks'), open = all.filter(t => t.status !== 'done');
     const overdue = open.filter(t => t.due && t.due < today).sort(taskSort);
     const todays = open.filter(t => !(t.due && t.due < today) && (t.todayDate === today || t.due === today)).sort(taskSort);
-    const shown = new Set([...overdue, ...todays].map(t => t.id));
+    // planned for an earlier day and never finished (otherwise they would just vanish)
+    const carried = open.filter(t => isYmd(t.todayDate) && t.todayDate < today && !(t.due && t.due <= today)).sort((a, b) => (a.todayDate === b.todayDate ? taskSort(a, b) : a.todayDate < b.todayDate ? 1 : -1));
+    const shown = new Set([...overdue, ...todays, ...carried].map(t => t.id));
     const doing = open.filter(t => t.status === 'doing' && !shown.has(t.id)).sort(taskSort);
     const doneToday = all.filter(t => t.status === 'done' && t.doneAt && ymd(new Date(t.doneAt)) === today).sort((a, b) => b.doneAt - a.doneAt);
     const ws = weekStartTs();
@@ -35,7 +37,13 @@ SY.views.today = {
         <div class="clay"><div class="k">03 · 推进</div><h3>每天挑几件放进今日</h3><p>看板拖动推进状态，燃尽图看进度是否赶得上截止日期。</p></div></div>`;
     }
     let main = '';
-    if (overdue.length) main += `<div><h2 class="sh is-warn">已逾期<span class="n">${overdue.length}</span></h2><div class="tlist">${overdue.map(t => taskRow(t)).join('')}</div></div>`;
+    if (carried.length) {
+      const more = carried.length > 8 ? `<div class="te" style="padding:6px 4px 0">还有 ${carried.length - 8} 件</div>` : '';
+      main += `<div class="carried"><h2 class="sh">之前计划、还没做完<span class="n">${carried.length}</span>
+        <span class="sh-acts"><button type="button" class="mini" data-act="carry-all">${icon('sun', 13)}全部放进今天</button><button type="button" class="mini" data-act="carry-clear" title="只是不再出现在这里，任务本身不会删除">不再提醒</button></span></h2>
+        <div class="tlist">${carried.slice(0, 8).map(t => taskRow(t, { planned: t.todayDate })).join('')}</div>${more}</div>`;
+    }
+    if (overdue.length) main += `<div><h2 class="sh is-warn">已逾期<span class="n">${overdue.length}</span></h2><div class="tlist">${overdue.map(t => taskRow(t, { resched: true })).join('')}</div></div>`;
     main += `<div><h2 class="sh">今天<span class="n">${todays.length}</span></h2>`;
     if (todays.length) main += `<div class="tlist">${todays.map(t => taskRow(t)).join('')}</div>`;
     else {
@@ -44,6 +52,18 @@ SY.views.today = {
         : `<div class="empty clay">今天没有安排，也没有积压的待办。切到「任务」记一件要做的事，它会直接出现在这里。</div>`;
     }
     main += `</div>`;
+    // the next seven days: due then, or planned for then
+    const week = addDays(today, 7), when = t => (isYmd(t.todayDate) && t.todayDate > today ? t.todayDate : isYmd(t.due) ? t.due : null);
+    const soon = open.filter(t => !shown.has(t.id) && when(t) && when(t) > today && when(t) <= week).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : taskSort(a, b)));
+    if (soon.length) {
+      const up = S.ui.upOpen !== false;
+      const dayName = d => (d === addDays(today, 1) ? '明天' : d === addDays(today, 2) ? '后天' : '周' + WD[parseYmd(d).getDay()]) + ' · ' + md(d);
+      const days = [];
+      for (const t of soon) { const d = when(t); if (!days.length || days[days.length - 1][0] !== d) days.push([d, []]); days[days.length - 1][1].push(t); }
+      const body = days.map(([d, ts]) => `<div class="up-day">${dayName(d)}</div><div class="tlist">${ts.map(t => taskRow(t)).join('')}</div>`).join('');
+      main += `<div class="upcoming ${up ? '' : 'is-closed'}"><h2 class="sh"><button type="button" class="sh-toggle" data-act="up-toggle" aria-expanded="${up}">${icon('arrow', 12)}接下来 7 天</button><span class="n">${soon.length}</span></h2>${up ? body : ''}</div>`;
+    }
+    soon.forEach(t => shown.add(t.id));
     if (doing.length) main += `<div><h2 class="sh">其他进行中<span class="n">${doing.length}</span></h2><div class="tlist">${doing.map(t => taskRow(t, { hideDoing: true })).join('')}</div></div>`;
     if (doneToday.length) main += `<div><h2 class="sh">今天完成<span class="n">${doneToday.length}</span></h2><div class="tlist">${doneToday.map(t => taskRow(t)).join('')}</div></div>`;
     const side = `<div class="side-col">
@@ -55,6 +75,34 @@ SY.views.today = {
     return head + `<div class="today-grid"><div class="stack">${main}</div>${side}</div>`;
   }
 };
+/* the one-click helpers on the Today page */
+const carriedNow = () => { const today = TODAY(); return list('tasks').filter(t => t.status !== 'done' && isYmd(t.todayDate) && t.todayDate < today && !(t.due && t.due <= today)); };
+function nextMonday(today) { const dow = parseYmd(today).getDay(); return addDays(today, ((8 - dow) % 7) || 7); }
+Object.assign(SY.acts, {
+  'carry-all': () => {
+    const ts = carriedNow(); if (!ts.length) return;
+    const before = ts.map(t => [t.id, t.todayDate]);
+    SY.withNote('放进今天', () => ts.forEach(t => SY.patch('tasks', t.id, { todayDate: TODAY() })));
+    SY.toast(`${ts.length} 件放进了今天`, { undo: () => SY.withNote('撤销放进今天', () => before.forEach(([id, d]) => SY.patch('tasks', id, { todayDate: d }))) });
+  },
+  'carry-clear': () => {
+    const ts = carriedNow(); if (!ts.length) return;
+    const before = ts.map(t => [t.id, t.todayDate]);
+    SY.withNote('不再提醒', () => ts.forEach(t => SY.patch('tasks', t.id, { todayDate: null })));
+    SY.toast(`这 ${ts.length} 件不会再出现在这里，任务都还在`, { undo: () => before.forEach(([id, d]) => SY.patch('tasks', id, { todayDate: d })) });
+  },
+  'resched': el => {
+    const t = S.data.tasks.get(el.dataset.id); if (!t) return;
+    const today = TODAY(), to = el.dataset.v === 'today' ? today : el.dataset.v === 'tomorrow' ? addDays(today, 1) : nextMonday(today);
+    const old = { due: t.due, start: t.start };
+    const part = { due: to };
+    // keep the length: a task with a start date moves as a whole
+    if (isYmd(t.start) && isYmd(t.due)) part.start = addDays(t.start, SY.dayDiff(t.due, to));
+    SY.patch('tasks', t.id, part);
+    SY.toast(`已改到${el.dataset.v === 'today' ? '今天' : el.dataset.v === 'tomorrow' ? '明天' : '下周一'}（${md(to)}）`, { undo: () => SY.patch('tasks', t.id, old) });
+  },
+  'up-toggle': () => { S.ui.upOpen = S.ui.upOpen === false; SY.saveUI(); SY.renderAll(); }
+});
 SY.acts['clear-samples'] = () => {
   const docs = SY.COLS.flatMap(c => list(c).filter(d => d.sample).map(d => [c, d.id]));
   if (S.sel && docs.some(([, id]) => id === S.sel.id)) S.sel = null;
@@ -90,26 +138,26 @@ SY.views.ideas = {
     const bucket = ts => { const td = new Date(); td.setHours(0, 0, 0, 0); if (ts >= td.getTime()) return '今天'; if (ts >= td.getTime() - 864e5) return '昨天'; if (ts >= weekStartTs()) return '本周'; if (ageDays(ts) < 31) return '本月'; return '更早'; };
     const groups = [];
     for (const i of items) { const b = bucket(i.createdAt || 0); if (!groups.length || groups[groups.length - 1][0] !== b) groups.push([b, []]); groups[groups.length - 1][1].push(i); }
-    return head + groups.map(([b, arr]) => `<div class="group-h">${b}</div><div class="ideas">${arr.map(ideaCard).join('')}</div>`).join('');
+    return head + groups.map(([b, arr]) => `<div class="group-h">${b}<span class="n">${arr.length}</span></div><div class="tlist ilist">${arr.map(ideaRow).join('')}</div>`).join('');
   }
 };
-function ideaCard(i) {
+/* one idea per row (fills a wide window; quicker to triage than cards) */
+function ideaRow(i) {
   const d = ageDays(i.createdAt), stale = i.status === 'inbox' && d >= 30, p = getP(i.projectId);
   const st = i.status === 'inbox' ? '' : i.status === 'converted' ? '<span class="pill pill-ok">已转化</span>' : i.status === 'incubating' ? '<span class="pill pill-lav">孵化中</span>' : '<span class="pill">归档</span>';
   const acts = i.status === 'archived' ? `<button type="button" class="mini" data-act="idea-status" data-v="inbox" data-id="${esc(i.id)}">放回收件箱</button>`
-    : i.status === 'converted' ? `<button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}">${icon('mind', 13)}导图</button>`
+    : i.status === 'converted' ? `<button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}" title="用导图展开">${icon('mind', 13)}<span class="al">导图</span></button>`
     : `<button type="button" class="mini is-ai ai" data-act="ai-idea" data-id="${esc(i.id)}">${icon('spark', 13)}AI 拆解</button>
-       <button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}">${icon('mind', 13)}导图</button>
-       <button type="button" class="mini" data-act="idea-to-task" data-id="${esc(i.id)}">${icon('task', 13)}转任务</button>
-       <button type="button" class="mini" data-act="idea-to-project" data-id="${esc(i.id)}">${icon('folder', 13)}转项目</button>
-       ${i.status === 'inbox' ? `<button type="button" class="mini" data-act="idea-status" data-v="incubating" data-id="${esc(i.id)}">孵化</button>` : ''}
+       <button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}" title="用导图展开">${icon('mind', 13)}<span class="al">导图</span></button>
+       <button type="button" class="mini" data-act="idea-to-task" data-id="${esc(i.id)}" title="转任务">${icon('task', 13)}<span class="al">转任务</span></button>
+       <button type="button" class="mini" data-act="idea-to-project" data-id="${esc(i.id)}" title="转项目">${icon('folder', 13)}<span class="al">转项目</span></button>
+       ${i.status === 'inbox' ? `<button type="button" class="mini" data-act="idea-status" data-v="incubating" data-id="${esc(i.id)}" title="先放着孵化">${icon('bulb', 13)}<span class="al">孵化</span></button>` : ''}
        <button type="button" class="mini" data-act="idea-status" data-v="archived" data-id="${esc(i.id)}" title="归档" aria-label="归档">${icon('archive', 13)}</button>`;
-  return `<div tabindex="0" class="idea clay ${SY.isSel('ideas', i.id) ? 'is-sel' : ''} ${i.status === 'archived' ? 'is-faded' : ''}" data-open="ideas:${esc(i.id)}">
-    <span class="idea-band" style="--c:${cv(IDEA_COL[i.status] || 'lav')}"></span>
+  return `<div tabindex="0" class="trow irow ${SY.isSel('ideas', i.id) ? 'is-sel' : ''} ${i.status === 'archived' ? 'is-faded' : ''}" data-open="ideas:${esc(i.id)}" style="--c:${cv(IDEA_COL[i.status] || 'lav')}">
     <button type="button" class="star ${i.star ? 'is-on' : ''}" data-act="star" data-id="${esc(i.id)}" aria-label="${i.star ? '取消星标' : '加星标'}">${icon('star')}</button>
-    <p class="idea-text">${SY.richText(i.text)}</p>
-    <div class="meta">${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}<span class="age ${stale ? 'is-stale' : ''}">${stale ? '已放 ' + d + ' 天' : esc(ago(i.createdAt))}</span>${st}
-      ${p ? `<button type="button" class="linkish" data-act="open-project" data-id="${esc(p.id)}">→ ${esc(p.name)}</button>` : ''}${i.note ? '<span>有补充</span>' : ''}</div>
+    <div class="trow-main"><p class="idea-text">${SY.richText(i.text)}</p>
+      <div class="meta">${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}<span class="age ${stale ? 'is-stale' : ''}">${stale ? '已放 ' + d + ' 天' : esc(ago(i.createdAt))}</span>${st}
+        ${p ? `<button type="button" class="linkish" data-act="open-project" data-id="${esc(p.id)}">→ ${esc(p.name)}</button>` : ''}${i.note ? '<span>有补充</span>' : ''}</div></div>
     <div class="row-acts">${acts}</div></div>`;
 }
 Object.assign(SY.acts, {
@@ -158,7 +206,7 @@ function pcard(p) {
     <p class="goal">${p.goal ? esc(p.goal) : '<span style="color:var(--ink-3)">还没写完成标准</span>'}</p>
     <div class="prog">${progBar(s)}<span class="mono">${s.done}/${s.total}</span></div>
     <div class="next">${s.next ? `<span class="k">下一步</span>${esc(s.next.title)}` : `<span class="k">${s.total ? '任务都完成了' : '还没有任务'}</span>`}</div>
-    <div class="foot"><span class="mono">${p.due ? '截止 ' + esc(dueLabel(p.due)) : '无截止'}</span><span class="${stale ? 'is-stale' : ''}">${stale ? idle + ' 天没动' : '更新于 ' + esc(ago(s.last))}</span></div></div>`;
+    <div class="foot"><span class="mono">${p.due ? '截止 ' + esc(p.status === 'done' ? md(p.due) : dueLabel(p.due)) : '无截止'}</span><span class="${stale ? 'is-stale' : ''}">${stale ? idle + ' 天没动' : '更新于 ' + esc(ago(s.last))}</span></div></div>`;
 }
 Object.assign(SY.acts, {
   'proj-area': el => { S.ui.projArea = el.dataset.v; SY.saveUI(); SY.renderAll(); },
@@ -179,7 +227,7 @@ SY.views.project = {
       <div class="vh"><div><h1><span class="dot" style="--c:${cv(loose ? 'ink-3' : pColor(p))};display:inline-block;width:14px;height:14px;border-radius:5px;margin-right:10px;vertical-align:2px"></span>${loose ? '零散任务' : esc(p.name)}</h1></div>
       <div class="vh-acts">${loose ? '' : `<button class="btn btn-ai ai" type="button" data-act="ai-project" data-id="${esc(p.id)}">${icon('spark')}AI 补任务</button><button class="btn" type="button" data-act="edit-project" data-id="${esc(p.id)}">${icon('edit', 14)}编辑项目</button>`}</div></div></div>
       ${loose ? '<p class="goal">不属于任何项目的日常小事。</p>' : `<div class="row"><span class="pill">${AREA[p.area] || '工作'}</span><span class="pill ${p.status === 'done' ? 'pill-ok' : p.status === 'paused' ? '' : 'pill-lav'}">${PROJ_ST[p.status] || '进行中'}</span>
-        ${p.start ? `<span class="due">${icon('cal', 12)}开始 ${esc(p.start)}</span>` : ''}${p.due ? `<span class="due ${p.status !== 'done' && p.due < TODAY() ? 'is-over' : ''}">${icon('cal', 12)}截止 ${esc(p.due)}（${esc(dueLabel(p.due))}）</span>` : ''}<span class="mono" style="color:var(--ink-3);font-size:12px">更新于 ${esc(ago(s.last))}</span></div>
+        ${p.start ? `<span class="due">${icon('cal', 12)}开始 ${esc(p.start)}</span>` : ''}${p.due ? `<span class="due ${p.status !== 'done' && p.due < TODAY() ? 'is-over' : ''}">${icon('cal', 12)}截止 ${esc(p.due)}${p.status === 'done' ? '' : `（${esc(dueLabel(p.due))}）`}</span>` : ''}<span class="mono" style="color:var(--ink-3);font-size:12px">更新于 ${esc(ago(s.last))}</span></div>
         ${p.goal ? `<p class="goal"><b style="color:var(--ink)">完成标准：</b>${esc(p.goal)}</p>` : '<p class="goal" style="color:var(--ink-3)">还没写完成标准。点「编辑项目」补一句「做到什么程度算完成」。</p>'}
         ${idea ? `<div class="src">源自灵感：<button type="button" class="linkish" data-open="ideas:${esc(idea.id)}">${esc(idea.text.length > 48 ? idea.text.slice(0, 48) + '…' : idea.text)}</button></div>` : ''}`}
       <div class="prog">${progBar(s)}<span class="mono">${s.done}/${s.total} 完成</span></div></div>

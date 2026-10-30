@@ -187,3 +187,24 @@ fn daily_message_blank_titles_do_not_add_etc() {
     let (_, body) = daily_message(&v).unwrap();
     assert_eq!(body, "有 1 件任务已经逾期", "{body}");
 }
+
+// ---------- carried over ----------
+
+#[test]
+fn daily_message_counts_tasks_left_from_an_earlier_plan() {
+    let v = json!({
+        "date": "2026-10-12", "weekday": "周一",
+        "overdue": [], "today": [{"id": "t1", "title": "写周报"}],
+        "carried_over": [{"id": "t2", "title": "交物业费"}, {"id": "t3", "title": "买墨盒"}]
+    });
+    let (_, body) = daily_message(&v).unwrap();
+    assert!(body.starts_with("今天要做 1 件，之前没做完 2 件："), "{body}");
+    assert!(body.contains("写周报") && body.contains("交物业费"), "{body}");
+}
+
+#[test]
+fn daily_message_with_only_carried_over_tasks() {
+    let v = json!({ "date": "2026-10-12", "weekday": "周一", "overdue": [], "today": [], "carried_over": [{"id": "t2", "title": "交物业费"}] });
+    let (_, body) = daily_message(&v).unwrap();
+    assert_eq!(body, "之前计划的 1 件还没做完：交物业费");
+}

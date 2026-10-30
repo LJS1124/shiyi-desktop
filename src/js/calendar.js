@@ -6,7 +6,14 @@
 const SY = window.SY, S = SY.S;
 const { esc, icon, list, getP, pColor, cv, scopeTasks, TODAY, addDays, dayDiff, parseYmd, ymd, isYmd, dur, taskSort, md } = SY;
 const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
-const LANES = 4; // bars shown per week row before "+N"
+/* week rows share the window height (a whole month fits without scrolling);
+   how many bars a row shows before "+N" follows from its height */
+const ROW_MIN = 70, ROW_MAX = 168, LANE_H = 27, NUM_H = 32;
+let LANES = 4;
+function rowHeight(weeks) {
+  const top = S.view.calTop || 330;
+  return Math.max(ROW_MIN, Math.min(ROW_MAX, Math.floor((window.innerHeight - top - 28) / weeks)));
+}
 
 const monthOf = d => d.slice(0, 7);
 const addMonths = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1); return ymd(d).slice(0, 7); };
@@ -65,6 +72,8 @@ function body(scope) {
   const ws0 = mondayOf(first);
   const last = addDays(addMonths(month, 1) + '-01', -1);
   const weeks = Math.ceil((dayDiff(ws0, last) + 1) / 7);
+  const rowH = rowHeight(weeks);
+  LANES = Math.max(1, Math.floor((rowH - NUM_H) / LANE_H));
   const all = items(scope);
   let rows = '';
   for (let w = 0; w < weeks; w++) {
@@ -76,7 +85,7 @@ function body(scope) {
       const n = Number(d.slice(8));
       nums += `<div class="cal-num ${d === today ? 'is-today' : ''}" style="grid-column:${c + 1};grid-row:1"><span>${n === 1 ? `${Number(d.slice(5, 7))}月` : ''}${n}</span>${hidden[c] ? `<button type="button" class="cal-more" data-act="cal-day" data-v="${d}">+${hidden[c]}</button>` : ''}</div>`;
     }
-    rows += `<div class="cal-week"><div class="cal-bg">${bg}</div><div class="cal-fg">${nums}${placed.map(barHtml).join('')}</div></div>`;
+    rows += `<div class="cal-week" style="min-height:${rowH}px"><div class="cal-bg">${bg}</div><div class="cal-fg">${nums}${placed.map(barHtml).join('')}</div></div>`;
   }
   const [y, m] = month.split('-').map(Number);
   const unsched = scopeTasks(scope).filter(t => t.status !== 'done' && !isYmd(t.start) && !isYmd(t.due)).sort(taskSort);
@@ -99,6 +108,17 @@ SY.mods.calendar = {
   body,
   after(root, scope) {
     const grid = root.querySelector('.cal-wrap'); if (!grid) return;
+    // where the grid starts decides how tall the rows can be; measure once and redraw if the guess was off
+    const g = root.querySelector('.cal-grid'), wrap = document.getElementById('view-wrap');
+    if (g && wrap) {
+      const top = Math.round(g.getBoundingClientRect().top + wrap.scrollTop);
+      if (Math.abs(top - (S.view.calTop || 0)) > 6) { S.view.calTop = top; SY.scheduleRender(); }
+      // in a very small window the month may still not fit: on opening, bring this week into view
+      if (SY.viewEntered) {
+        const td = root.querySelector('.cal-cell.is-today');
+        if (td) requestAnimationFrame(() => { const r = td.getBoundingClientRect(), w = wrap.getBoundingClientRect(); if (r.bottom > w.bottom) wrap.scrollTop += r.bottom - w.bottom + 16; });
+      }
+    }
     grid.addEventListener('pointerdown', e => onDown(e, scope));
     grid.addEventListener('dblclick', e => {
       if (e.target.closest('.cal-bar,.cal-more,.cal-side')) return;
@@ -193,4 +213,7 @@ Object.assign(SY.acts, {
 document.addEventListener('change', e => { if (e.target.id === 'cal-done') { S.ui.calDone = !!e.target.checked; SY.saveUI(); SY.scheduleRender(); } });
 
 SY.views.calendar = SY.chartView('calendar', '日历', '按日期看任务和项目截止；多天的任务横跨显示，颜色对应项目。');
+/* the row heights depend on the window */
+let rz = 0;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.ui.view === 'calendar') SY.scheduleRender(); }, 120); });
 })();

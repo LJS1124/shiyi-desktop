@@ -97,6 +97,7 @@ const IC = {
   copy: '<rect x="5.2" y="5.2" width="8.4" height="8.4" rx="1.4"/><path d="M10.8 5.2V3.6c0-.6-.4-1.1-1-1.1H3.6c-.6 0-1.1.5-1.1 1.1v6.2c0 .6.5 1 1.1 1h1.6"/>',
   search: '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4l3.6 3.6"/>',
   hash: '<path d="M6.2 2.5L5 13.5M11 2.5L9.8 13.5M2.8 5.8h11M2.2 10.2h11"/>',
+  help: '<circle cx="8" cy="8" r="6"/><path d="M6.3 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.7 1.4-1.7 2.6M8 11.6v.1"/>',
   moon: '<path d="M13.4 9.6A5.6 5.6 0 0 1 6.4 2.6a5.6 5.6 0 1 0 7 7z"/>',
   wand: '<path d="M3 13l7.5-7.5M9.2 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5zM12.8 7l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4z"/>'
 };
@@ -275,13 +276,12 @@ function renderStatus() {
   const el = $('#side-foot'); if (!el) return;
   const cls = S.saveErr ? 'is-err' : SY.isApp ? '' : 'is-local';
   const txt = S.saveErr ? '保存出错：' + S.saveErr : SY.isApp ? '已保存到本机' : '网页预览 · 数据存在浏览器里';
+  // export / import live in 设置 → 数据; shortcuts behind "?" so this stays small in a short window
   el.innerHTML = `<span class="status ${cls}"><i></i>${txt}</span>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn btn-sm btn-ghost" type="button" data-act="export">${icon('down', 14)}导出</button>
-      <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
+    <div class="foot-acts">
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
+      <button class="btn btn-sm btn-ghost" type="button" data-act="shortcuts" title="快捷键" aria-label="快捷键">${icon('help', 14)}快捷键</button>
     </div>
-    <div style="line-height:1.7">${SY.keys('⌘K 搜索 · ⌘N 记录 · ⌘1–⌘9 切换')}<br>Esc 关闭详情</div>
     ${SY.updateFootHtml ? SY.updateFootHtml() : ''}`;
 }
 function renderCapture() {
@@ -308,6 +308,7 @@ function renderView() {
   if (ae && ae.dataset && ae.dataset.keep && root.contains(ae)) keep = { k: ae.dataset.keep, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd };
   const v = SY.views[S.ui.view] || SY.views.today;
   if (curView && curView.before) { try { curView.before(root); } catch (e) { console.error(e); } }
+  SY.viewEntered = curView !== v; // true on the first render after switching views
   root.classList.toggle('is-canvas', !!(v.canvas && (typeof v.canvas !== 'function' || v.canvas())));
   root.innerHTML = S.ready ? v.render() : `<div class="skel"><i style="width:40%"></i><i style="width:62%"></i><i style="width:55%"></i></div>`;
   curView = v;
@@ -320,8 +321,10 @@ const isSel = (col, id) => S.sel && S.sel.col === col && S.sel.id === id;
 const prioTag = p => (p > 0 ? `<span class="prio prio-${p}">P${p}</span>` : '');
 const projChip = p => (p ? `<span class="pchip"><span class="dot" style="--c:${cv(pColor(p))}"></span>${esc(p.name)}</span>` : `<span class="pchip"><span class="dot"></span>零散</span>`);
 function dueTag(t) {
-  if (!t.due) return '';
   const today = TODAY(), done = t.status === 'done';
+  // a finished task is not "overdue": say when it was finished
+  if (done) return t.doneAt ? `<span class="due is-finished" title="${t.due ? '截止 ' + esc(t.due) : ''}">${icon('check', 12)}完成于 ${esc(md(tsDay(t.doneAt)))}</span>` : t.due ? `<span class="due">${icon('cal', 12)}${esc(md(t.due))}</span>` : '';
+  if (!t.due) return '';
   const cls = !done && t.due < today ? 'is-over' : !done && t.due === today ? 'is-today' : '';
   return `<span class="due ${cls}">${icon('cal', 12)}${esc(dueLabel(t.due))}</span>`;
 }
@@ -331,6 +334,8 @@ function taskRow(t, opt = {}) {
     <button type="button" class="chk ${t.status === 'doing' ? 'is-doing' : ''}" data-act="toggle-done" data-id="${esc(t.id)}" aria-label="${done ? '标记为未完成' : '标记为完成'}">${done ? icon('check', 13) : ''}</button>
     <div class="trow-main"><div class="trow-title">${esc(t.title)}</div>
       <div class="meta">${prioTag(t.priority)}${t.status === 'doing' && !opt.hideDoing ? '<span class="pill pill-doing">进行中</span>' : ''}${opt.noProject ? '' : projChip(getP(t.projectId))}${dueTag(t)}${(t.deps || []).length ? `<span>${icon('link', 12)} ${t.deps.length}</span>` : ''}${t.note ? '<span>有备注</span>' : ''}</div></div>
+    ${opt.planned ? `<span class="planned" title="原本计划在这天做">计划 ${esc(md(opt.planned))}</span>` : ''}
+    ${opt.resched && !done ? `<span class="resched"><button type="button" class="mini" data-act="resched" data-v="today" data-id="${esc(t.id)}">今天</button><button type="button" class="mini" data-act="resched" data-v="tomorrow" data-id="${esc(t.id)}">明天</button><button type="button" class="mini" data-act="resched" data-v="nextmon" data-id="${esc(t.id)}">下周一</button></span>` : ''}
     ${done ? '' : `<button type="button" class="today-btn ${inToday ? 'is-on' : ''}" data-act="toggle-today" data-id="${esc(t.id)}" title="${inToday ? '移出今日' : '加入今日'}" aria-label="${inToday ? '移出今日' : '加入今日'}">${icon('sun')}</button>`}
   </div>`;
 }
@@ -569,17 +574,33 @@ async function openSettings() {
       <p>所有数据保存在本机的一个数据库文件里，和应用本身分开放，更新或重装应用都不会动它。每天自动备份一份，保留最近 14 天；每次更新版本后第一次打开，还会额外完整备份一份。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${invoke ? `<button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}${SY.isMac ? '在访达中显示' : '打开数据文件夹'}</button>` : ''}
+        ${invoke ? `<button class="btn btn-sm" type="button" data-act="backups">${icon('reopen', 14)}从备份恢复…</button><button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}${SY.isMac ? '在访达中显示' : '打开数据文件夹'}</button>` : ''}
         <button class="btn btn-sm" type="button" data-act="export">${icon('down', 14)}导出备份</button>
         <button class="btn btn-sm" type="button" data-act="import">${icon('up', 14)}导入备份</button>
       </div>
     </div>
     ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      ${shortcutsHtml()}
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear', wide: true });
 }
+function shortcutsHtml() {
+  return `<p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">${SY.keys('⌘Z')}</b> 撤销自己刚才的修改，<b class="mono">${SY.keys('⇧⌘Z')}</b> 重做 · <b class="mono">Esc</b> 关闭详情</p>`;
+}
+SY.acts['shortcuts'] = () => {
+  const row = (k, d) => `<div class="kb-row"><b class="mono">${SY.keys(k)}</b><span>${d}</span></div>`;
+  openModal('快捷键', `<div class="kb-list">
+    ${row('⌥⇧Space', '在任何应用里唤出拾忆，光标放进记录框')}
+    ${row('⌘K', '搜索和命令')}
+    ${row('⌘N', '聚焦记录框（也可以按 /）；以 /t 开头直接记成任务')}
+    ${row('⌘1–⌘9', '切换视图')}
+    ${row('⌘Z', '撤销自己刚才的修改')}
+    ${row('⇧⌘Z', '重做')}
+    ${row('[[', '在记录框和备注里插入双链')}
+    ${row('Esc', '关闭详情或弹窗')}
+  </div>`, `<button class="btn btn-primary" type="button" data-act="close-modal">好</button>`, { iconName: null });
+};
 function readSettingsForm() {
   return { apiFormat: $('#s-format').value, apiBase: $('#s-base').value.trim(), model: $('#s-model').value.trim() || 'claude-sonnet-5-5', quickModel: $('#s-quick').value.trim() || 'claude-haiku-5-5', apiKey: $('#s-key').value.trim() };
 }
@@ -798,6 +819,10 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && t.matches && t.matches('[role="button"][data-act]')) { e.preventDefault(); const f = SY.acts[t.dataset.act]; if (f) f(t, e); return; }
   if (e.key === 'Enter' && t.matches && t.matches('[data-open]')) { e.preventDefault(); const [col, id] = t.dataset.open.split(':'); select(col, id); return; }
   const v = SY.views[S.ui.view]; if (v && v.key && v.key(e)) return;
+  // ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y): your last change; text boxes keep their own undo
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && !e.altKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) SY.redoLast(); else SY.undoLast(); return; }
+  if (mod && !SY.isMac && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); SY.redoLast(); return; }
   if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); SY.focusCapture(); }
 });
 
@@ -837,7 +862,14 @@ SY.panZoom = (wrap, layer, state, { onChange } = {}) => {
   return {
     apply,
     zoom(f) { const r = wrap.getBoundingClientRect(), mx = r.width / 2, my = r.height / 2; const k2 = clamp(state.k * f, 0.25, 2.5); state.x = mx - (mx - state.x) * (k2 / state.k); state.y = my - (my - state.y) * (k2 / state.k); state.k = k2; apply(); },
-    fit(bw, bh, pad = 60) { const r = wrap.getBoundingClientRect(); const k = clamp(Math.min((r.width - pad * 2) / Math.max(bw, 1), (r.height - pad * 2) / Math.max(bh, 1)), 0.3, 1.2); state.k = k; state.x = (r.width - bw * k) / 2; state.y = (r.height - bh * k) / 2; apply(); }
+    /* fit the content; with minK it never gets smaller than that (text stays
+       readable): then it starts at the top left, or centres on `focus` */
+    fit(bw, bh, pad = 60, { minK = 0.3, maxK = 1.2, focus = null } = {}) {
+      const r = wrap.getBoundingClientRect();
+      const k = clamp(Math.min((r.width - pad * 2) / Math.max(bw, 1), (r.height - pad * 2) / Math.max(bh, 1)), minK, maxK);
+      const place = (view, size, f) => (size * k <= view - pad * 2 + 1 ? (view - size * k) / 2 : clamp(f != null ? view / 2 - f * k : pad, view - pad - size * k, pad));
+      state.k = k; state.x = place(r.width, bw, focus && focus.x); state.y = place(r.height, bh, focus && focus.y); apply();
+    }
   };
 };
 
