@@ -282,11 +282,13 @@ impl Core {
         }
         backup_counts(&src_path).map_err(|_| Error::new("invalid_value", "这份备份打不开，可能已经损坏"))?;
         let stamp: String = self.clock().now_iso().chars().take(19).filter(|c| *c != ':').map(|c| if c == 'T' { '-' } else { c }).collect();
-        let saved = format!("before-restore-{stamp}.db");
-        let saved_path = dir.join(&saved);
-        if !saved_path.exists() {
-            self.conn.execute("VACUUM INTO ?1", [saved_path.to_string_lossy().as_ref()])?;
-        }
+        // never reuse a name: two restores within one second each keep their copy
+        let (saved, saved_path) = (1..)
+            .map(|n: u32| if n == 1 { format!("before-restore-{stamp}.db") } else { format!("before-restore-{stamp}-{n}.db") })
+            .map(|name| { let path = dir.join(&name); (name, path) })
+            .find(|(_, path)| !path.exists())
+            .expect("an unused name");
+        self.conn.execute("VACUUM INTO ?1", [saved_path.to_string_lossy().as_ref()])?;
         {
             let src = Connection::open_with_flags(&src_path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
             let b = rusqlite::backup::Backup::new(&src, &mut self.conn)?;
@@ -295,16 +297,16 @@ impl Core {
         // an older backup may predate parts of the schema; and it is this version that runs now
         self.init(true)?;
         Core::meta_set(&self.conn, "app_version", crate::VERSION)?;
-        let mut olds: Vec<PathBuf> = std::fs::read_dir(&dir)?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("before-restore-") && n.ends_with(".db")))
+        // keep the newest 5 copies (by when they were written)
+        let mut olds: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().map_or(false, |n| n.starts_with("before-restore-") && n.ends_with(".db")))
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .filter(|(_, p)| *p != saved_path)
             .collect();
         olds.sort();
-        while olds.len() > 5 {
-            let old = olds.remove(0);
-            if old != saved_path {
-                let _ = std::fs::remove_file(old);
-            }
+        while olds.len() > 4 {
+            let _ = std::fs::remove_file(olds.remove(0).1);
         }
         Ok(json!({ "restored": file, "saved_current": saved }))
     }

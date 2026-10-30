@@ -195,3 +195,18 @@ fn only_the_newest_five_before_restore_copies_are_kept() {
     assert_eq!(kept.len(), 5, "got {kept:?}");
     assert_eq!(kept, saved[2..].to_vec(), "the five newest are the ones kept");
 }
+
+#[test]
+fn two_restores_in_the_same_second_keep_both_copies() {
+    let dir = TempDir::new("same-second");
+    let mut c = open(&dir.db(), NOW);
+    add_idea(&mut c, "一");
+    c.backup_daily(14).unwrap();
+    let daily = c.list_backups().unwrap()[0]["file"].as_str().unwrap().to_string();
+    let a = c.restore_backup(&daily).unwrap();
+    add_idea(&mut c, "二");
+    let b = c.restore_backup(&daily).unwrap();
+    assert_ne!(a["saved_current"], b["saved_current"], "each restore saves its own copy");
+    let kept: Vec<String> = c.list_backups().unwrap().iter().filter(|x| x["kind"] == "restore").map(|x| x["file"].as_str().unwrap().to_string()).collect();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+}
