@@ -308,6 +308,7 @@ function renderView() {
   if (ae && ae.dataset && ae.dataset.keep && root.contains(ae)) keep = { k: ae.dataset.keep, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd };
   const v = SY.views[S.ui.view] || SY.views.today;
   if (curView && curView.before) { try { curView.before(root); } catch (e) { console.error(e); } }
+  SY.viewEntered = curView !== v; // true on the first render after switching views
   root.classList.toggle('is-canvas', !!(v.canvas && (typeof v.canvas !== 'function' || v.canvas())));
   root.innerHTML = S.ready ? v.render() : `<div class="skel"><i style="width:40%"></i><i style="width:62%"></i><i style="width:55%"></i></div>`;
   curView = v;

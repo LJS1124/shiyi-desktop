@@ -877,3 +877,16 @@ pre.diag{margin:0;padding:12px 14px;border-radius:12px;background:var(--clay-2);
 .trash-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px}
 .trash-main{flex:1;min-width:0}
 .trash-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ideas as rows */
+.group-h .n{font-family:var(--f-mono);font-weight:500;margin-left:6px;letter-spacing:0}
+.ilist{margin-bottom:6px}
+.irow{align-items:center}
+.irow .star{flex:none;margin:-2px 0}
+.irow .idea-text{font-size:14px;line-height:1.55;-webkit-line-clamp:2;font-weight:550}
+.irow .meta{margin-top:3px}
+.irow .row-acts{flex:none;display:flex;gap:0;align-items:center;opacity:.5;transition:opacity .12s}
+.irow:hover .row-acts,.irow.is-sel .row-acts,.irow .row-acts:focus-within{opacity:1}
+.irow .row-acts .mini{padding:0 8px}
+.irow.is-faded{opacity:.62}
+@media (max-width:1240px){.irow .row-acts .al{display:none}.irow .row-acts .mini{padding:0 7px}}

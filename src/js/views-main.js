@@ -138,26 +138,26 @@ SY.views.ideas = {
     const bucket = ts => { const td = new Date(); td.setHours(0, 0, 0, 0); if (ts >= td.getTime()) return '今天'; if (ts >= td.getTime() - 864e5) return '昨天'; if (ts >= weekStartTs()) return '本周'; if (ageDays(ts) < 31) return '本月'; return '更早'; };
     const groups = [];
     for (const i of items) { const b = bucket(i.createdAt || 0); if (!groups.length || groups[groups.length - 1][0] !== b) groups.push([b, []]); groups[groups.length - 1][1].push(i); }
-    return head + groups.map(([b, arr]) => `<div class="group-h">${b}</div><div class="ideas">${arr.map(ideaCard).join('')}</div>`).join('');
+    return head + groups.map(([b, arr]) => `<div class="group-h">${b}<span class="n">${arr.length}</span></div><div class="tlist ilist">${arr.map(ideaRow).join('')}</div>`).join('');
   }
 };
-function ideaCard(i) {
+/* one idea per row (fills a wide window; quicker to triage than cards) */
+function ideaRow(i) {
   const d = ageDays(i.createdAt), stale = i.status === 'inbox' && d >= 30, p = getP(i.projectId);
   const st = i.status === 'inbox' ? '' : i.status === 'converted' ? '<span class="pill pill-ok">已转化</span>' : i.status === 'incubating' ? '<span class="pill pill-lav">孵化中</span>' : '<span class="pill">归档</span>';
   const acts = i.status === 'archived' ? `<button type="button" class="mini" data-act="idea-status" data-v="inbox" data-id="${esc(i.id)}">放回收件箱</button>`
-    : i.status === 'converted' ? `<button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}">${icon('mind', 13)}导图</button>`
+    : i.status === 'converted' ? `<button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}" title="用导图展开">${icon('mind', 13)}<span class="al">导图</span></button>`
     : `<button type="button" class="mini is-ai ai" data-act="ai-idea" data-id="${esc(i.id)}">${icon('spark', 13)}AI 拆解</button>
-       <button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}">${icon('mind', 13)}导图</button>
-       <button type="button" class="mini" data-act="idea-to-task" data-id="${esc(i.id)}">${icon('task', 13)}转任务</button>
-       <button type="button" class="mini" data-act="idea-to-project" data-id="${esc(i.id)}">${icon('folder', 13)}转项目</button>
-       ${i.status === 'inbox' ? `<button type="button" class="mini" data-act="idea-status" data-v="incubating" data-id="${esc(i.id)}">孵化</button>` : ''}
+       <button type="button" class="mini" data-act="idea-to-map" data-id="${esc(i.id)}" title="用导图展开">${icon('mind', 13)}<span class="al">导图</span></button>
+       <button type="button" class="mini" data-act="idea-to-task" data-id="${esc(i.id)}" title="转任务">${icon('task', 13)}<span class="al">转任务</span></button>
+       <button type="button" class="mini" data-act="idea-to-project" data-id="${esc(i.id)}" title="转项目">${icon('folder', 13)}<span class="al">转项目</span></button>
+       ${i.status === 'inbox' ? `<button type="button" class="mini" data-act="idea-status" data-v="incubating" data-id="${esc(i.id)}" title="先放着孵化">${icon('bulb', 13)}<span class="al">孵化</span></button>` : ''}
        <button type="button" class="mini" data-act="idea-status" data-v="archived" data-id="${esc(i.id)}" title="归档" aria-label="归档">${icon('archive', 13)}</button>`;
-  return `<div tabindex="0" class="idea clay ${SY.isSel('ideas', i.id) ? 'is-sel' : ''} ${i.status === 'archived' ? 'is-faded' : ''}" data-open="ideas:${esc(i.id)}">
-    <span class="idea-band" style="--c:${cv(IDEA_COL[i.status] || 'lav')}"></span>
+  return `<div tabindex="0" class="trow irow ${SY.isSel('ideas', i.id) ? 'is-sel' : ''} ${i.status === 'archived' ? 'is-faded' : ''}" data-open="ideas:${esc(i.id)}" style="--c:${cv(IDEA_COL[i.status] || 'lav')}">
     <button type="button" class="star ${i.star ? 'is-on' : ''}" data-act="star" data-id="${esc(i.id)}" aria-label="${i.star ? '取消星标' : '加星标'}">${icon('star')}</button>
-    <p class="idea-text">${SY.richText(i.text)}</p>
-    <div class="meta">${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}<span class="age ${stale ? 'is-stale' : ''}">${stale ? '已放 ' + d + ' 天' : esc(ago(i.createdAt))}</span>${st}
-      ${p ? `<button type="button" class="linkish" data-act="open-project" data-id="${esc(p.id)}">→ ${esc(p.name)}</button>` : ''}${i.note ? '<span>有补充</span>' : ''}</div>
+    <div class="trow-main"><p class="idea-text">${SY.richText(i.text)}</p>
+      <div class="meta">${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}<span class="age ${stale ? 'is-stale' : ''}">${stale ? '已放 ' + d + ' 天' : esc(ago(i.createdAt))}</span>${st}
+        ${p ? `<button type="button" class="linkish" data-act="open-project" data-id="${esc(p.id)}">→ ${esc(p.name)}</button>` : ''}${i.note ? '<span>有补充</span>' : ''}</div></div>
     <div class="row-acts">${acts}</div></div>`;
 }
 Object.assign(SY.acts, {
