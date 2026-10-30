@@ -155,7 +155,8 @@ SY.views.mindmap = {
     if (!st) st = S.view.mm[m.id] = { x: 0, y: 0, k: 1 };
     const pz = SY.panZoom(wrap, canvas, st);
     SY.mmPZ = { pz, W, H };
-    if (fresh) { const r = wrap.getBoundingClientRect(); st.x = r.width / 2 - rp.x; st.y = r.height / 2 - rp.y; pz.apply(); }
+    // the whole map if it fits at a readable size, otherwise centred on the root (first-level branches around it)
+    if (fresh) pz.fit(W, H, 30, { minK: 0.6, maxK: 1, focus: rp });
     // keep selected node in view
     const se = els.get(selId), revealKey = m.id + '|' + selId;
     if (se && centerNext === selId) {

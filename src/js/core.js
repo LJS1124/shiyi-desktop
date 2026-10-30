@@ -97,6 +97,7 @@ const IC = {
   copy: '<rect x="5.2" y="5.2" width="8.4" height="8.4" rx="1.4"/><path d="M10.8 5.2V3.6c0-.6-.4-1.1-1-1.1H3.6c-.6 0-1.1.5-1.1 1.1v6.2c0 .6.5 1 1.1 1h1.6"/>',
   search: '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4l3.6 3.6"/>',
   hash: '<path d="M6.2 2.5L5 13.5M11 2.5L9.8 13.5M2.8 5.8h11M2.2 10.2h11"/>',
+  help: '<circle cx="8" cy="8" r="6"/><path d="M6.3 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.7 1.4-1.7 2.6M8 11.6v.1"/>',
   moon: '<path d="M13.4 9.6A5.6 5.6 0 0 1 6.4 2.6a5.6 5.6 0 1 0 7 7z"/>',
   wand: '<path d="M3 13l7.5-7.5M9.2 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5zM12.8 7l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4z"/>'
 };
@@ -275,13 +276,12 @@ function renderStatus() {
   const el = $('#side-foot'); if (!el) return;
   const cls = S.saveErr ? 'is-err' : SY.isApp ? '' : 'is-local';
   const txt = S.saveErr ? '保存出错：' + S.saveErr : SY.isApp ? '已保存到本机' : '网页预览 · 数据存在浏览器里';
+  // export / import live in 设置 → 数据; shortcuts behind "?" so this stays small in a short window
   el.innerHTML = `<span class="status ${cls}"><i></i>${txt}</span>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn btn-sm btn-ghost" type="button" data-act="export">${icon('down', 14)}导出</button>
-      <button class="btn btn-sm btn-ghost" type="button" data-act="import">${icon('up', 14)}导入</button>
+    <div class="foot-acts">
       <button class="btn btn-sm btn-ghost" type="button" data-act="settings">${icon('gear', 14)}设置</button>
+      <button class="btn btn-sm btn-ghost" type="button" data-act="shortcuts" title="快捷键" aria-label="快捷键">${icon('help', 14)}快捷键</button>
     </div>
-    <div style="line-height:1.7">${SY.keys('⌘K 搜索 · ⌘N 记录 · ⌘1–⌘9 切换')}<br>Esc 关闭详情</div>
     ${SY.updateFootHtml ? SY.updateFootHtml() : ''}`;
 }
 function renderCapture() {
@@ -581,10 +581,26 @@ async function openSettings() {
     </div>
     ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">${SY.keys('⌘Z')}</b> 撤销自己刚才的修改，<b class="mono">${SY.keys('⇧⌘Z')}</b> 重做 · <b class="mono">Esc</b> 关闭详情</p>
+      ${shortcutsHtml()}
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear', wide: true });
 }
+function shortcutsHtml() {
+  return `<p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">${SY.keys('⌘Z')}</b> 撤销自己刚才的修改，<b class="mono">${SY.keys('⇧⌘Z')}</b> 重做 · <b class="mono">Esc</b> 关闭详情</p>`;
+}
+SY.acts['shortcuts'] = () => {
+  const row = (k, d) => `<div class="kb-row"><b class="mono">${SY.keys(k)}</b><span>${d}</span></div>`;
+  openModal('快捷键', `<div class="kb-list">
+    ${row('⌥⇧Space', '在任何应用里唤出拾忆，光标放进记录框')}
+    ${row('⌘K', '搜索和命令')}
+    ${row('⌘N', '聚焦记录框（也可以按 /）；以 /t 开头直接记成任务')}
+    ${row('⌘1–⌘9', '切换视图')}
+    ${row('⌘Z', '撤销自己刚才的修改')}
+    ${row('⇧⌘Z', '重做')}
+    ${row('[[', '在记录框和备注里插入双链')}
+    ${row('Esc', '关闭详情或弹窗')}
+  </div>`, `<button class="btn btn-primary" type="button" data-act="close-modal">好</button>`, { iconName: null });
+};
 function readSettingsForm() {
   return { apiFormat: $('#s-format').value, apiBase: $('#s-base').value.trim(), model: $('#s-model').value.trim() || 'claude-sonnet-5-5', quickModel: $('#s-quick').value.trim() || 'claude-haiku-5-5', apiKey: $('#s-key').value.trim() };
 }
@@ -846,7 +862,14 @@ SY.panZoom = (wrap, layer, state, { onChange } = {}) => {
   return {
     apply,
     zoom(f) { const r = wrap.getBoundingClientRect(), mx = r.width / 2, my = r.height / 2; const k2 = clamp(state.k * f, 0.25, 2.5); state.x = mx - (mx - state.x) * (k2 / state.k); state.y = my - (my - state.y) * (k2 / state.k); state.k = k2; apply(); },
-    fit(bw, bh, pad = 60) { const r = wrap.getBoundingClientRect(); const k = clamp(Math.min((r.width - pad * 2) / Math.max(bw, 1), (r.height - pad * 2) / Math.max(bh, 1)), 0.3, 1.2); state.k = k; state.x = (r.width - bw * k) / 2; state.y = (r.height - bh * k) / 2; apply(); }
+    /* fit the content; with minK it never gets smaller than that (text stays
+       readable): then it starts at the top left, or centres on `focus` */
+    fit(bw, bh, pad = 60, { minK = 0.3, maxK = 1.2, focus = null } = {}) {
+      const r = wrap.getBoundingClientRect();
+      const k = clamp(Math.min((r.width - pad * 2) / Math.max(bw, 1), (r.height - pad * 2) / Math.max(bh, 1)), minK, maxK);
+      const place = (view, size, f) => (size * k <= view - pad * 2 + 1 ? (view - size * k) / 2 : clamp(f != null ? view / 2 - f * k : pad, view - pad - size * k, pad));
+      state.k = k; state.x = place(r.width, bw, focus && focus.x); state.y = place(r.height, bh, focus && focus.y); apply();
+    }
   };
 };
 

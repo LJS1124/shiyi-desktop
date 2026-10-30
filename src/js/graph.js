@@ -488,7 +488,8 @@ SY.views.graph = {
     { const r = wrap.getBoundingClientRect(); if (r.width > 200 && r.height > 150) G.aspect = r.width / r.height; }
     const pz = SY.panZoom(wrap, canvas, G.pan, { onChange: st => wrap.classList.toggle('g-low', st.k < 0.45) });
     G.pz = pz;
-    if (fresh || G.refit) { G.refit = false; requestAnimationFrame(() => pz.fit(G.off.W, G.off.H, 36)); }
+    // not so small that labels can't be read; the biggest group is packed top left, so start there
+    if (fresh || G.refit) { G.refit = false; requestAnimationFrame(() => pz.fit(G.off.W, G.off.H, 36, { minK: 0.6 })); }
     const svg = root.querySelector('#g-svg');
     svg.querySelectorAll('.gnode').forEach(el => el.addEventListener('pointerdown', e => nodeDown(e, el, wrap)));
     svg.querySelectorAll('.gnode').forEach(el => el.addEventListener('dblclick', e => { e.stopPropagation(); openEntity(el.dataset.id); }));

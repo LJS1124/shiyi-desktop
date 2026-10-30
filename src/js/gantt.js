@@ -119,6 +119,19 @@ SY.mods.gantt = {
     if (st) { sc.scrollLeft = dayDiff(start, st.date) * px; sc.scrollTop = st.top; }
     else sc.scrollLeft = Math.max(0, Number(sc.dataset.today) - 5 * px);
     sc.querySelectorAll('.gbar').forEach(b => b.addEventListener('pointerdown', e => barDown(e, b, px)));
+    // a bar that starts left of the visible area keeps its title in view
+    const bars = [...sc.querySelectorAll('.gbar')];
+    let raf = 0;
+    const stick = () => {
+      raf = 0; const L = sc.scrollLeft;
+      for (const b of bars) {
+        const l = parseFloat(b.style.left), w = parseFloat(b.style.width), gl = b.querySelector('.gl'); if (!gl) continue;
+        const off = L > l && L < l + w - 48 ? Math.round(L - l) : 0;
+        gl.style.paddingLeft = off ? off + 'px' : '';
+      }
+    };
+    sc.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(stick); }, { passive: true });
+    stick();
     sc.querySelectorAll('[data-unsched]').forEach(tr => tr.addEventListener('click', e => {
       if (e.target.closest('.gbar')) return;
       const t = S.data.tasks.get(tr.dataset.unsched); if (!t) return;
