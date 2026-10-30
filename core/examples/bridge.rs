@@ -27,6 +27,10 @@ fn main() {
                 Ok(json!(!seen && core.is_empty()?))
             })(),
             "watch" => Ok(json!({ "dv": core.data_version(), "seq": core.max_seq() })),
+            "list_backups" => core.list_backups().map(Value::Array),
+            "restore_backup" => core.restore_backup(args["file"].as_str().unwrap_or("")),
+            // tests: make today's daily backup now
+            "e2e_backup_daily" => core.backup_daily(14).map(|p| json!(p.map(|p| p.display().to_string()))),
             other => Err(Error::new("unknown_cmd", other)),
         };
         let reply = match res {

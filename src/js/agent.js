@@ -23,7 +23,7 @@ async function fetchLog() {
   try { await SY.store.flush(); } catch (e) {}
   const rev = S.rev;
   try {
-    V.items = await SY.store.getLog({ actor: V.filter === 'all' ? null : V.filter, limit: 300 });
+    V.items = await SY.store.getLog({ actor: V.filter === 'all' || V.filter === 'trash' ? null : V.filter, limit: 300 });
     V.err = null;
   } catch (e) { V.err = SY.errText(e); V.items = V.items || []; }
   V.rev = rev; V.loading = false;
@@ -106,6 +106,35 @@ function summaryLine(bs) {
   }
   return merged.slice(0, 6).join('、') + (merged.length > 6 ? ` 等 ${merged.length} 处` : '');
 }
+/* 最近删除: deleted ideas, projects, tasks and maps that are still gone, one row
+   per batch (a project deleted with its tasks comes back with them) */
+const COL = { idea: 'ideas', project: 'projects', task: 'tasks', map: 'maps' };
+const nameIn = s => ((String(s || '').match(/「(.+?)」/) || [])[1] || '');
+function trashRows(items) {
+  const rows = [];
+  for (const b of items) {
+    if (b.undone || isUndoBatch(b)) continue;
+    const gone = b.ops.filter(o => KIND(o.op) === 'delete' && COL[o.entity_type] && !S.data[COL[o.entity_type]].has(o.entity_id));
+    if (!gone.length) continue;
+    const lead = gone.find(o => o.entity_type === 'project') || gone[0];
+    rows.push({ b, gone, lead });
+  }
+  return rows;
+}
+function trashHtml(items) {
+  const rows = trashRows(items);
+  if (!rows.length) return `<div class="empty-big clay"><h3>最近没有删除过东西</h3><p>删除的灵感、项目、任务和导图都会出现在这里，可以一键恢复。删除项目时一起删掉的任务，会跟着一起回来。</p></div>`;
+  return `<div class="trash">${rows.map(({ b, gone, lead }) => {
+    const who = whoOf(b.actor), others = gone.filter(o => o !== lead), ms = tsMs(b.ts);
+    const extra = others.length ? (lead.entity_type === 'project' && others.every(o => o.entity_type === 'task') ? `及其 ${others.length} 个任务` : `等 ${gone.length} 项`) : '';
+    return `<div class="trash-row clay">
+      <span class="pill">${TYPE_CN[lead.entity_type] || ''}</span>
+      <div class="trash-main"><div class="trash-t">${esc(nameIn(lead.summary) || lead.entity_id)}<span class="te"> ${esc(extra)}</span></div>
+        <div class="te">${dayLabel(ms)} ${hm(ms)} 由${who ? ' ' + esc(who) + '（AI）' : '我'}删除${b.note ? ' · ' + esc(b.note) : ''}</div></div>
+      <button type="button" class="btn btn-sm" data-act="trash-restore" data-batch="${esc(b.batch)}" data-name="${esc(nameIn(lead.summary))}">${icon('reopen', 14)}恢复</button>
+    </div>`;
+  }).join('')}</div>`;
+}
 SY.views.log = {
   render() {
     if (S.unseenAgent) { S.unseenAgent = 0; setTimeout(() => SY.renderAll(), 0); }
@@ -124,21 +153,23 @@ SY.views.log = {
         out += groupHtml(g);
       }
       body = shown.length ? `<div class="oplog">${out}</div>` : '<div class="empty">没有符合筛选条件的记录。</div>';
+      if (V.filter === 'trash') body = trashHtml(items);
     }
+    if (V.filter === 'trash' && items && !items.length) body = trashHtml([]);
     return `<div class="vh"><div><h1>操作记录</h1><div class="sub">每一次修改都记在这里——你在界面里做的，和 AI 通过命令行做的。任何一批都能撤销，撤销本身也能再撤销。</div></div>
-        <div class="vh-acts"><div class="seg">${[['all', '全部'], ['agents', 'AI'], ['user', '我']].map(([k, l]) => `<button type="button" class="${V.filter === k ? 'is-on' : ''}" data-act="op-filter" data-v="${k}">${l}</button>`).join('')}</div></div></div>
+        <div class="vh-acts"><div class="seg">${[['all', '全部'], ['agents', 'AI'], ['user', '我'], ['trash', '最近删除']].map(([k, l]) => `<button type="button" class="${V.filter === k ? 'is-on' : ''}" data-act="op-filter" data-v="${k}">${l}</button>`).join('')}</div></div></div>
       <div class="agent-banner clay">
         <span class="ab-ic">${icon('shield', 18)}</span>
         <div><b>AI 权限：${perm[1]}</b><div class="te">${perm[2]}</div></div>
         <span class="sp"></span>
         <button type="button" class="btn btn-sm" data-act="settings">${icon('term', 14)}AI 接入设置</button>
       </div>
-      <div class="toolbar">
+      ${V.filter === 'trash' ? '' : `<div class="toolbar">
         <div class="seg seg-sm">${[['all', '全部类型'], ['idea', '灵感'], ['project', '项目'], ['task', '任务'], ['map', '导图'], ['link', '关联']].map(([k, l]) => `<button type="button" class="${V.type === k ? 'is-on' : ''}" data-act="op-type" data-v="${k}">${l}</button>`).join('')}</div>
         <div class="seg seg-sm">${[['all', '全部操作'], ['create', '新建'], ['update', '修改'], ['delete', '删除'], ['undo', '撤销']].map(([k, l]) => `<button type="button" class="${V.kind === k ? 'is-on' : ''}" data-act="op-kind" data-v="${k}">${l}</button>`).join('')}</div>
         <span class="sp"></span>
         <input class="ctl" id="op-q" data-keep="op-q" placeholder="搜索记录…" value="${esc(V.q)}" style="width:180px">
-      </div>
+      </div>`}
       ${V.err ? `<div class="warn">读取记录失败：${esc(V.err)}</div>` : ''}
       ${body}`;
   }
@@ -230,6 +261,12 @@ Object.assign(SY.acts, {
     el.disabled = true; let n = 0;
     try { for (const b of el.dataset.batches.split(',')) { const r = await SY.store.undo(b); if (!r) break; n++; } SY.toast(n ? `已撤销这一组的 ${n} 次修改` : '没有撤销'); }
     catch (e) { SY.toast('撤销失败：' + SY.errText(e)); }
+    V.rev = -1; SY.renderAll();
+  },
+  'trash-restore': async el => {
+    el.disabled = true;
+    try { const r = await SY.store.undo(el.dataset.batch); if (r) SY.toast(`已恢复${el.dataset.name ? '「' + el.dataset.name + '」' : ''}`); }
+    catch (e) { SY.toast('恢复失败：' + SY.errText(e)); }
     V.rev = -1; SY.renderAll();
   },
   'op-undo': async el => {

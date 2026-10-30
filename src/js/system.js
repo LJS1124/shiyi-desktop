@@ -145,6 +145,51 @@ document.addEventListener('keydown', e => {
   if (e.target && e.target.id === 'fb-title' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const b = document.getElementById('fb-body'); if (b) b.focus(); }
 });
 
+/* ---------- 设置 → 数据 → 从备份恢复 ---------- */
+const KIND_CN = { daily: '每日备份', upgrade: '升级前', restore: '恢复前' };
+const countLine = c => c ? `灵感 ${c.ideas || 0} · 项目 ${c.projects || 0} · 任务 ${c.tasks || 0} · 导图 ${c.maps || 0}` : '读不出内容（可能已损坏）';
+function backupWhen(b) {
+  const t = String(b.modified || '').slice(0, 16).replace('T', ' ');
+  if (b.kind === 'upgrade') { const m = b.file.match(/^upgrade-(.+?)-to-(.+?)-\d{4}-/); if (m) return `${t} · 从 ${m[1] === 'earlier' ? '旧版本' : 'v' + m[1]} 升级到 v${m[2]} 之前`; }
+  if (b.kind === 'restore') return `${t} · 上一次恢复之前的数据`;
+  return t;
+}
+async function openBackups() {
+  let list = [];
+  try { list = await SY.invoke('list_backups'); } catch (e) { SY.toast('读取备份失败：' + SY.errText(e)); return; }
+  const now = { ideas: S.data.ideas.size, projects: S.data.projects.size, tasks: S.data.tasks.size, maps: S.data.maps.size };
+  SY.openModal('从备份恢复', `<p style="margin:0">拾忆每天第一次打开时自动备份一份（保留 14 天），每次升级前、每次恢复前也会各存一份。恢复会把<b>全部数据</b>换成那份备份里的样子；恢复前会先把现在的数据另存一份，出现在列表最上面，随时可以换回来。</p>
+    <div class="bk-now"><span class="pill pill-lav">现在</span><span>${countLine(now)}</span></div>
+    <div class="bk-list">${list.map(b => `<div class="bk-row">
+      <span class="pill ${b.kind === 'restore' ? 'pill-ok' : ''}">${KIND_CN[b.kind] || b.kind}</span>
+      <div class="bk-main"><div class="bk-t mono">${esc(backupWhen(b))}</div><div class="te">${countLine(b.counts)} · ${mb(b.bytes)}</div></div>
+      ${b.counts ? `<button type="button" class="btn btn-sm" data-act="backup-restore" data-v="${esc(b.file)}">恢复到这份</button>` : ''}
+    </div>`).join('') || '<div class="empty">还没有备份。每天第一次打开拾忆时会自动备份。</div>'}</div>`,
+    `<button class="btn" type="button" data-act="reveal-data">${icon('folder', 14)}打开数据文件夹</button><span style="flex:1"></span><button class="btn btn-primary" type="button" data-act="close-modal">关闭</button>`,
+    { iconName: 'reopen' });
+  SY.BK = list;
+}
+async function restoreBackup(file) {
+  const b = (SY.BK || []).find(x => x.file === file); if (!b) return;
+  const ok = await SY.ask('恢复到这份备份？', `全部数据会换成 <b>${esc(backupWhen(b))}</b> 时的样子：${esc(countLine(b.counts))}。<br>现在的数据会先另存一份，在备份列表里随时能换回来。`, '恢复', { danger: true });
+  if (!ok) return;
+  try {
+    await SY.store.flush();
+    const r = await SY.invoke('restore_backup', { file });
+    S.sel = null;
+    await SY.store.reload();
+    SY.toast('已恢复到这份备份，恢复前的数据另存了一份', { action: { label: '撤销恢复', fn: () => undoRestore(r.saved_current) }, ms: 12000 });
+  } catch (e) { SY.toast('恢复失败：' + SY.errText(e), { ms: 9000 }); }
+}
+async function undoRestore(saved) {
+  try { await SY.invoke('restore_backup', { file: saved }); await SY.store.reload(); SY.toast('已换回恢复之前的数据'); }
+  catch (e) { SY.toast('没能换回：' + SY.errText(e)); }
+}
+Object.assign(SY.acts, {
+  'backups': () => openBackups(),
+  'backup-restore': el => restoreBackup(el.dataset.v)
+});
+
 /* 设置 → 关于 and ⌘K */
 SY.diagButtons = () => `<button class="btn btn-sm" type="button" data-act="diag-open">${icon('shield', 14)}诊断信息</button><button class="btn btn-sm" type="button" data-act="feedback">${icon('edit', 14)}反馈问题</button>`;
 SY.diagCommands = () => [

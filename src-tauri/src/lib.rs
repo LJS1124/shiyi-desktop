@@ -977,6 +977,23 @@ fn diagnostics(app: AppHandle, store: State<'_, Store>) -> Value {
     })
 }
 
+/// The automatic backups, newest first, with what each holds.
+#[tauri::command]
+fn list_backups(store: State<'_, Store>) -> Result<Value, Value> {
+    with_core(&store, |c| c.list_backups().map(Value::Array))
+}
+
+/// Puts the data back to a backup; the current data is saved as a backup first.
+#[tauri::command]
+fn restore_backup(app: AppHandle, store: State<'_, Store>, file: String) -> Result<Value, Value> {
+    let r = with_core(&store, |c| c.restore_backup(&file));
+    match &r {
+        Ok(v) => applog(&app, &format!("从备份恢复：{file}（恢复前的数据另存为 {}）", v["saved_current"].as_str().unwrap_or(""))),
+        Err(e) => applog(&app, &format!("从备份恢复失败：{}", e["message"].as_str().unwrap_or(""))),
+    }
+    r
+}
+
 /// Opens "New issue" on GitHub with the title and text filled in.
 #[tauri::command]
 fn open_feedback(title: String, body: String) -> Result<(), String> {
@@ -1155,7 +1172,9 @@ pub fn run() {
             save_prefs,
             notify_test,
             diagnostics,
-            open_feedback
+            open_feedback,
+            list_backups,
+            restore_backup
         ])
         .build(context)
         .expect("error while building 拾忆");

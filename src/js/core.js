@@ -573,7 +573,7 @@ async function openSettings() {
       <p>所有数据保存在本机的一个数据库文件里，和应用本身分开放，更新或重装应用都不会动它。每天自动备份一份，保留最近 14 天；每次更新版本后第一次打开，还会额外完整备份一份。也可以随时导出成 JSON；网页版导出的备份可以直接导入。</p>
       ${st.dataPath ? `<div class="path">${esc(st.dataPath)}</div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${invoke ? `<button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}${SY.isMac ? '在访达中显示' : '打开数据文件夹'}</button>` : ''}
+        ${invoke ? `<button class="btn btn-sm" type="button" data-act="backups">${icon('reopen', 14)}从备份恢复…</button><button class="btn btn-sm" type="button" data-act="reveal-data">${icon('folder', 14)}${SY.isMac ? '在访达中显示' : '打开数据文件夹'}</button>` : ''}
         <button class="btn btn-sm" type="button" data-act="export">${icon('down', 14)}导出备份</button>
         <button class="btn btn-sm" type="button" data-act="import">${icon('up', 14)}导入备份</button>
       </div>

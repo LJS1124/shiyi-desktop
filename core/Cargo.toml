@@ -15,5 +15,5 @@ name = "shiyi"
 path = "src/bin/shiyi.rs"
 
 [dependencies]
-rusqlite = { version = "0.34", features = ["bundled"] }
+rusqlite = { version = "0.34", features = ["bundled", "backup"] }
 serde_json = "1"

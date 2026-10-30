@@ -864,3 +864,16 @@ pre.diag{margin:0;padding:12px 14px;border-radius:12px;background:var(--clay-2);
 .up-day{font-size:12px;color:var(--ink-3);font-weight:650;margin:10px 6px 6px}
 .upcoming .up-day:first-of-type{margin-top:0}
 .due.is-finished{color:var(--mint-ink)}
+
+/* backups */
+.bk-now{display:flex;align-items:center;gap:10px;font-size:13px;padding:2px 4px}
+.bk-list{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,420px);overflow:auto}
+.bk-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--clay-2)}
+.bk-main{flex:1;min-width:0}
+.bk-t{font-size:12.5px;color:var(--ink)}
+
+/* operation log: recently deleted */
+.trash{display:flex;flex-direction:column;gap:8px;max-width:920px}
+.trash-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px}
+.trash-main{flex:1;min-width:0}
+.trash-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
