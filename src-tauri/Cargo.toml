@@ -26,6 +26,7 @@ shiyi-core = { path = "../core" }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
 # `zip` (default) only serves legacy .zip update packages, and every zip 2.x/4.x release is yanked
 tauri-plugin-updater = { version = "2.14", default-features = false, features = ["rustls-tls", "system-proxy"] }
 

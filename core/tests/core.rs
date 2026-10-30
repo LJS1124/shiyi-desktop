@@ -450,3 +450,26 @@ fn schema_is_complete() {
     let s = ok(c.query(json!({"q": "schema", "type": "tasks"})));
     assert_eq!(s["types"][0]["type"], "task");
 }
+
+#[test]
+fn today_lists_tasks_left_over_from_an_earlier_plan() {
+    let mut c = core();
+    ok(c.apply(
+        json!({"ops": [
+            {"op": "task.create", "title": "昨天计划没做完", "today": "-1d"},
+            {"op": "task.create", "title": "上周计划没做完", "today": "-6d"},
+            {"op": "task.create", "title": "昨天计划已做完", "today": "-1d", "status": "done"},
+            {"op": "task.create", "title": "昨天计划但已逾期", "today": "-1d", "due": "-1d"},
+            {"op": "task.create", "title": "昨天计划今天到期", "today": "-1d", "due": "today"},
+            {"op": "task.create", "title": "今天计划", "today": "today"}
+        ]}),
+        "user",
+    ));
+    let t = ok(c.query(json!({"q": "today"})));
+    let names = |k: &str| t[k].as_array().unwrap().iter().map(|x| x["title"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    let carried = names("carried_over");
+    assert_eq!(carried.len(), 2, "{carried:?}");
+    assert!(carried.contains(&"昨天计划没做完".to_string()) && carried.contains(&"上周计划没做完".to_string()));
+    assert_eq!(names("overdue"), vec!["昨天计划但已逾期"]);
+    assert!(names("today").contains(&"昨天计划今天到期".to_string()) && names("today").contains(&"今天计划".to_string()));
+}

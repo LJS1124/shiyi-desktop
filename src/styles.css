@@ -849,3 +849,18 @@ button.tag.is-on{background:var(--lav);color:#fff}
 .set-sec .opt-chk{white-space:normal}
 .te.ok{color:var(--mint-ink)} .te.bad{color:var(--rose-ink)}
 pre.diag{margin:0;padding:12px 14px;border-radius:12px;background:var(--clay-2);font-family:var(--f-mono);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;user-select:text;-webkit-user-select:text;color:var(--ink-2)}
+
+/* Today: carried over, next 7 days, reschedule */
+.sh .sh-acts{margin-left:auto;display:flex;gap:4px;letter-spacing:0}
+.carried .today-btn{opacity:1}
+.carried .tlist{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--butter) 45%,transparent)}
+.planned{flex:none;align-self:center;font-size:11.5px;color:var(--butter-ink);background:var(--butter-soft);border-radius:8px;padding:2px 8px;font-family:var(--f-mono)}
+.resched{flex:none;display:flex;gap:2px;align-self:center;opacity:.55;transition:opacity .12s}
+.trow:hover .resched,.trow.is-sel .resched,.resched:focus-within{opacity:1}
+.resched .mini{height:26px;padding:0 8px;font-size:12px}
+.sh-toggle{display:inline-flex;align-items:center;gap:6px;font:inherit;color:inherit;letter-spacing:inherit}
+.sh-toggle svg{transform:rotate(90deg);transition:transform .15s}
+.upcoming.is-closed .sh-toggle svg{transform:none}
+.up-day{font-size:12px;color:var(--ink-3);font-weight:650;margin:10px 6px 6px}
+.upcoming .up-day:first-of-type{margin-top:0}
+.due.is-finished{color:var(--mint-ink)}

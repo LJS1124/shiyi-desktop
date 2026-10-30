@@ -186,6 +186,38 @@ async function copy(text) {
   }
 }
 SY.copyText = copy;
+
+/* ⌘Z / ⇧⌘Z anywhere: undo your own most recent change (a whole batch, as in
+   the operation log), redo it again. Changes by AI agents are left alone. */
+const redo = [], redone = new Set(); // undo batches ⌘Z made; redo batches ⇧⌘Z made (those can be undone again)
+const isUndo = x => !!x.undo_of || x.note === '撤销' || ((x.ops || []).length && (x.ops || []).every(o => String(o.op).endsWith('.undo')));
+const batchText = b => { const o = (b.ops || [])[0]; const s = o ? String(o.summary || '').replace(/^撤销：/, '') : '修改'; return s.length > 28 ? s.slice(0, 27) + '…' : s; };
+SY.undoLast = async () => {
+  try {
+    await SY.store.flush();
+    const log = await SY.store.getLog({ actor: 'user', limit: 40 });
+    const b = log.find(x => !x.undone && x.note !== '示例数据' && (!isUndo(x) || redone.has(x.batch)));
+    if (!b) { SY.toast('没有可以撤销的修改'); return; }
+    const r = await SY.store.undo(b.batch);
+    if (!r) return;
+    redo.push(r.batch);
+    const n = (b.ops || []).length;
+    SY.toast(`已撤销：${batchText(b)}${n > 1 ? ` 等 ${n} 处` : ''}`, { action: { label: '重做', fn: () => SY.redoLast() }, ms: 6000 });
+  } catch (e) { SY.toast('撤销失败：' + SY.errText(e)); }
+};
+SY.redoLast = async () => {
+  try {
+    const top = redo[redo.length - 1];
+    if (!top) { SY.toast('没有可以重做的'); return; }
+    await SY.store.flush();
+    const log = await SY.store.getLog({ actor: 'user', limit: 1 });
+    // only right after the undo: a new change since then wins
+    if (!log[0] || log[0].batch !== top) { redo.length = 0; SY.toast('之后又有新的修改，不能重做了'); return; }
+    redo.pop();
+    const r = await SY.store.undo(top);
+    if (r) { redone.add(r.batch); SY.toast('已重做'); }
+  } catch (e) { SY.toast('重做失败：' + SY.errText(e)); }
+};
 document.addEventListener('input', e => { if (e.target.id === 'op-q') { V.q = e.target.value; if (!e.isComposing) SY.scheduleRender(); } });
 document.addEventListener('compositionend', e => { if (e.target.id === 'op-q') { V.q = e.target.value; SY.scheduleRender(); } });
 Object.assign(SY.acts, {

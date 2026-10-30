@@ -48,23 +48,28 @@ fn clip(s: &str, n: usize) -> String {
 }
 
 /// Title and body from a `today` query result; `None` when nothing is due
-/// today or overdue (no reason to interrupt).
+/// today, overdue or left over from an earlier day's plan (no reason to interrupt).
 pub fn daily_message(today: &Value) -> Option<(String, String)> {
     let items = |k: &str| today[k].as_array().cloned().unwrap_or_default();
     let overdue = items("overdue");
     let late: HashSet<String> = overdue.iter().filter_map(|t| t["id"].as_str().map(str::to_string)).collect();
     // a task planned for today that is also overdue counts once, as overdue
     let planned: Vec<Value> = items("today").into_iter().filter(|t| t["id"].as_str().map_or(true, |id| !late.contains(id))).collect();
-    if overdue.is_empty() && planned.is_empty() {
+    let carried = items("carried_over");
+    if overdue.is_empty() && planned.is_empty() && carried.is_empty() {
         return None;
     }
-    let head = match (planned.len(), overdue.len()) {
+    let mut head = match (planned.len(), overdue.len()) {
+        (0, 0) => String::new(),
         (p, 0) => format!("今天要做 {p} 件"),
         (0, o) => format!("有 {o} 件任务已经逾期"),
         (p, o) => format!("今天要做 {p} 件，逾期 {o} 件"),
     };
-    let titles: Vec<String> = overdue.iter().chain(planned.iter()).filter_map(|t| t["title"].as_str()).filter(|t| !t.trim().is_empty()).take(3).map(|t| clip(t, 18)).collect();
-    let total = overdue.len() + planned.len();
+    if !carried.is_empty() {
+        head = if head.is_empty() { format!("之前计划的 {} 件还没做完", carried.len()) } else { format!("{head}，之前没做完 {} 件", carried.len()) };
+    }
+    let titles: Vec<String> = overdue.iter().chain(planned.iter()).chain(carried.iter()).filter_map(|t| t["title"].as_str()).filter(|t| !t.trim().is_empty()).take(3).map(|t| clip(t, 18)).collect();
+    let total = overdue.len() + planned.len() + carried.len();
     let mut list = titles.join("、");
     if total > titles.len() && !titles.is_empty() {
         list.push_str(" 等");

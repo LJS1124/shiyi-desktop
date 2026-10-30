@@ -320,8 +320,10 @@ const isSel = (col, id) => S.sel && S.sel.col === col && S.sel.id === id;
 const prioTag = p => (p > 0 ? `<span class="prio prio-${p}">P${p}</span>` : '');
 const projChip = p => (p ? `<span class="pchip"><span class="dot" style="--c:${cv(pColor(p))}"></span>${esc(p.name)}</span>` : `<span class="pchip"><span class="dot"></span>零散</span>`);
 function dueTag(t) {
-  if (!t.due) return '';
   const today = TODAY(), done = t.status === 'done';
+  // a finished task is not "overdue": say when it was finished
+  if (done) return t.doneAt ? `<span class="due is-finished" title="${t.due ? '截止 ' + esc(t.due) : ''}">${icon('check', 12)}完成于 ${esc(md(tsDay(t.doneAt)))}</span>` : t.due ? `<span class="due">${icon('cal', 12)}${esc(md(t.due))}</span>` : '';
+  if (!t.due) return '';
   const cls = !done && t.due < today ? 'is-over' : !done && t.due === today ? 'is-today' : '';
   return `<span class="due ${cls}">${icon('cal', 12)}${esc(dueLabel(t.due))}</span>`;
 }
@@ -331,6 +333,8 @@ function taskRow(t, opt = {}) {
     <button type="button" class="chk ${t.status === 'doing' ? 'is-doing' : ''}" data-act="toggle-done" data-id="${esc(t.id)}" aria-label="${done ? '标记为未完成' : '标记为完成'}">${done ? icon('check', 13) : ''}</button>
     <div class="trow-main"><div class="trow-title">${esc(t.title)}</div>
       <div class="meta">${prioTag(t.priority)}${t.status === 'doing' && !opt.hideDoing ? '<span class="pill pill-doing">进行中</span>' : ''}${opt.noProject ? '' : projChip(getP(t.projectId))}${dueTag(t)}${(t.deps || []).length ? `<span>${icon('link', 12)} ${t.deps.length}</span>` : ''}${t.note ? '<span>有备注</span>' : ''}</div></div>
+    ${opt.planned ? `<span class="planned" title="原本计划在这天做">计划 ${esc(md(opt.planned))}</span>` : ''}
+    ${opt.resched && !done ? `<span class="resched"><button type="button" class="mini" data-act="resched" data-v="today" data-id="${esc(t.id)}">今天</button><button type="button" class="mini" data-act="resched" data-v="tomorrow" data-id="${esc(t.id)}">明天</button><button type="button" class="mini" data-act="resched" data-v="nextmon" data-id="${esc(t.id)}">下周一</button></span>` : ''}
     ${done ? '' : `<button type="button" class="today-btn ${inToday ? 'is-on' : ''}" data-act="toggle-today" data-id="${esc(t.id)}" title="${inToday ? '移出今日' : '加入今日'}" aria-label="${inToday ? '移出今日' : '加入今日'}">${icon('sun')}</button>`}
   </div>`;
 }
@@ -576,7 +580,7 @@ async function openSettings() {
     </div>
     ${SY.aboutSection ? SY.aboutSection() : ''}
     <div class="set-sec"><h3>快捷键</h3>
-      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">Esc</b> 关闭详情</p>
+      <p><b class="mono">${SY.keys('⌥⇧Space')}</b> 在任何应用里唤出拾忆并聚焦记录框 · <b class="mono">${SY.keys('⌘K')}</b> 搜索和命令 · <b class="mono">${SY.keys('⌘N')}</b> 或 <b class="mono">/</b> 聚焦记录框 · <b class="mono">${SY.keys('⌘1–⌘9')}</b> 切换视图 · <b class="mono">${SY.keys('⌘Z')}</b> 撤销自己刚才的修改，<b class="mono">${SY.keys('⇧⌘Z')}</b> 重做 · <b class="mono">Esc</b> 关闭详情</p>
     </div>`,
     `<button class="btn" type="button" data-act="close-modal">取消</button><button class="btn btn-primary" type="button" data-act="settings-save">保存</button>`, { iconName: 'gear', wide: true });
 }
@@ -798,6 +802,10 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && t.matches && t.matches('[role="button"][data-act]')) { e.preventDefault(); const f = SY.acts[t.dataset.act]; if (f) f(t, e); return; }
   if (e.key === 'Enter' && t.matches && t.matches('[data-open]')) { e.preventDefault(); const [col, id] = t.dataset.open.split(':'); select(col, id); return; }
   const v = SY.views[S.ui.view]; if (v && v.key && v.key(e)) return;
+  // ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y): your last change; text boxes keep their own undo
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && !e.altKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) SY.redoLast(); else SY.undoLast(); return; }
+  if (mod && !SY.isMac && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); SY.redoLast(); return; }
   if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); SY.focusCapture(); }
 });
 
